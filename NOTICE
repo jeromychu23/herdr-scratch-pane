@@ -1,0 +1,10 @@
+herdr-floating-pane selectively reuses design ideas and small implementation
+patterns from Tyru5/herdr-floax, which is distributed under the MIT License.
+
+Original project:
+https://github.com/Tyru5/herdr-floax
+
+Copyright (c) 2026 Tyrus Malmstrom
+
+This plugin is also inspired by tmux-floax:
+https://github.com/omerxx/tmux-floax

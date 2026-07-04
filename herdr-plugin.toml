@@ -1,0 +1,45 @@
+# herdr-floating-pane
+#
+# A Rust Herdr plugin that provides tmux-floax style floating scratch panes.
+# The floating surface is app-drawn inside a zoomed split host pane because
+# Herdr's plugin overlay placement is transient in current v1 plugin APIs.
+
+id = "herdr-floating-pane"
+name = "herdr-floating-pane"
+version = "0.1.0"
+description = "Rust floating scratch panes for Herdr, inspired by tmux-floax."
+min_herdr_version = "0.7.1"
+platforms = ["macos"]
+
+[[build]]
+command = ["cargo", "build", "--release"]
+
+[[panes]]
+id = "workspace-floating"
+title = "⌂ floating workspace"
+placement = "split"
+command = ["./target/release/herdr-floating-pane", "run-pane", "--scope", "workspace"]
+
+[[panes]]
+id = "session-floating"
+title = "⌂ floating session"
+placement = "split"
+command = ["./target/release/herdr-floating-pane", "run-pane", "--scope", "session"]
+
+[[actions]]
+id = "toggle-workspace"
+title = "Toggle workspace floating pane"
+description = "Open, reveal, or minimize the floating pane for the current workspace."
+command = ["./target/release/herdr-floating-pane", "toggle", "--scope", "workspace"]
+
+[[actions]]
+id = "toggle-session"
+title = "Toggle session floating pane"
+description = "Open, reveal, or minimize the session-global floating pane."
+command = ["./target/release/herdr-floating-pane", "toggle", "--scope", "session"]
+
+[[actions]]
+id = "minimize-current"
+title = "Minimize current floating pane"
+description = "Minimize whichever herdr-floating-pane host pane is visible."
+command = ["./target/release/herdr-floating-pane", "minimize"]
