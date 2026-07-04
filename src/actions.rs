@@ -17,6 +17,27 @@ pub enum MinimizeDecision {
     NotifyNoVisiblePane,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SplitDirection {
+    Right,
+    Down,
+}
+
+impl SplitDirection {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Right => "right",
+            Self::Down => "down",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SafeSplitDecision {
+    Split { direction: SplitDirection },
+    NotifyBlocked,
+}
+
 pub fn open_pane_args(request: OpenPaneRequest) -> Vec<String> {
     let mut args = vec![
         "plugin".into(),
@@ -79,6 +100,55 @@ pub fn pane_get_args(pane_id: &str) -> Vec<String> {
 
 pub fn notification_args(message: &str) -> Vec<String> {
     vec!["notification".into(), "show".into(), message.into()]
+}
+
+pub fn split_pane_args(direction: SplitDirection) -> Vec<String> {
+    vec![
+        "pane".into(),
+        "split".into(),
+        "--current".into(),
+        "--direction".into(),
+        direction.as_str().into(),
+        "--focus".into(),
+    ]
+}
+
+pub fn report_marker_args(pane_id: &str, scope: Scope) -> Vec<String> {
+    vec![
+        "pane".into(),
+        "report-metadata".into(),
+        pane_id.into(),
+        "--source".into(),
+        PLUGIN_ID.into(),
+        "--title".into(),
+        "scratch running".into(),
+        "--custom-status".into(),
+        format!("scratch {}", scope.as_str()),
+    ]
+}
+
+pub fn clear_marker_args(pane_id: &str) -> Vec<String> {
+    vec![
+        "pane".into(),
+        "report-metadata".into(),
+        pane_id.into(),
+        "--source".into(),
+        PLUGIN_ID.into(),
+        "--clear-title".into(),
+        "--clear-custom-status".into(),
+    ]
+}
+
+pub fn safe_split_decision(
+    current: &PaneInfo,
+    panes: &[PaneInfo],
+    direction: SplitDirection,
+) -> SafeSplitDecision {
+    if is_scratch(current) || panes.iter().any(|pane| pane.focused && is_scratch(pane)) {
+        SafeSplitDecision::NotifyBlocked
+    } else {
+        SafeSplitDecision::Split { direction }
+    }
 }
 
 pub fn minimize_decision(current: &PaneInfo, panes: &[PaneInfo]) -> MinimizeDecision {

@@ -4,6 +4,7 @@ use std::process::Command;
 use anyhow::{bail, Context, Result};
 
 use crate::scope::{session_name, Scope};
+use crate::status::default_state_dir;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DtachCommand {
@@ -101,8 +102,5 @@ fn command_exists(program: &str) -> bool {
 }
 
 fn state_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("HERDR_PLUGIN_STATE_DIR") {
-        return PathBuf::from(dir);
-    }
-    std::env::temp_dir().join("herdr-scratch-pane")
+    default_state_dir()
 }

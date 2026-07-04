@@ -1,9 +1,12 @@
 use herdr_scratch_pane::actions::{
-    minimize_decision, open_pane_args, open_target_for_current, MinimizeDecision, OpenPaneRequest,
+    clear_marker_args, minimize_decision, open_pane_args, open_target_for_current,
+    report_marker_args, safe_split_decision, split_pane_args, MinimizeDecision, OpenPaneRequest,
+    SafeSplitDecision, SplitDirection,
 };
 use herdr_scratch_pane::herdr::{parse_opened_pane_id, PaneInfo};
 use herdr_scratch_pane::keybindings::{install_keybindings_text, DEFAULT_KEYBINDINGS_MARKER};
 use herdr_scratch_pane::scope::Scope;
+use herdr_scratch_pane::status::{choose_marker_target, ScratchState};
 
 #[test]
 fn open_pane_args_use_native_split_zoom_host_and_pass_scope_cwd_env() {
@@ -53,16 +56,168 @@ fn session_open_pane_args_select_session_entrypoint_without_target_when_absent()
 
 #[test]
 fn keybinding_install_appends_once_and_preserves_existing_text() {
-    let initial = "[keys]\nprefix = \"ctrl+b\"\n";
-    let first = install_keybindings_text(initial, "prefix+f", "prefix+shift+f", "prefix+cmd+z");
-    assert!(first.starts_with(initial));
+    let initial = "[keys]\nprefix = \"ctrl+b\"\nsplit_vertical = \"prefix+|\"\n";
+    let first =
+        install_keybindings_text(initial, "prefix+f", "prefix+shift+f", "prefix+cmd+z", true)
+            .unwrap();
     assert!(first.contains(DEFAULT_KEYBINDINGS_MARKER));
     assert!(first.contains("command = \"herdr-scratch-pane.toggle-workspace\""));
     assert!(first.contains("command = \"herdr-scratch-pane.toggle-session\""));
     assert!(first.contains("command = \"herdr-scratch-pane.minimize-current\""));
+    assert!(first.contains("command = \"herdr-scratch-pane.safe-split-right\""));
+    assert!(first.contains("command = \"herdr-scratch-pane.safe-split-down\""));
+    assert!(first.contains("split_vertical = \"\""));
+    assert!(first.contains("split_horizontal = \"\""));
+    assert!(first.contains("key = \"prefix+|\""));
+    assert!(first.contains("key = \"prefix+minus\""));
 
-    let second = install_keybindings_text(&first, "prefix+g", "prefix+shift+g", "prefix+alt+z");
+    let second =
+        install_keybindings_text(&first, "prefix+g", "prefix+shift+g", "prefix+alt+z", true)
+            .unwrap();
     assert_eq!(first, second);
+}
+
+#[test]
+fn keybinding_install_can_skip_split_proxy() {
+    let initial = "[keys]\nsplit_vertical = \"prefix+v\"\nsplit_horizontal = \"prefix+-\"\n";
+    let updated =
+        install_keybindings_text(initial, "prefix+f", "prefix+shift+f", "prefix+cmd+z", false)
+            .unwrap();
+
+    assert!(updated.contains("split_vertical = \"prefix+v\""));
+    assert!(updated.contains("split_horizontal = \"prefix+-\""));
+    assert!(!updated.contains("herdr-scratch-pane.safe-split-right"));
+    assert!(!updated.contains("herdr-scratch-pane.safe-split-down"));
+}
+
+#[test]
+fn safe_split_blocks_scratch_and_delegates_normal_panes() {
+    let scratch = PaneInfo {
+        pane_id: "fw".into(),
+        workspace_id: Some("w1".into()),
+        cwd: None,
+        label: Some("⌂ scratch workspace".into()),
+        focused: true,
+    };
+    assert_eq!(
+        safe_split_decision(&scratch, &[], SplitDirection::Right),
+        SafeSplitDecision::NotifyBlocked
+    );
+
+    let normal = PaneInfo {
+        pane_id: "p1".into(),
+        workspace_id: Some("w1".into()),
+        cwd: None,
+        label: Some("main".into()),
+        focused: true,
+    };
+    assert_eq!(
+        safe_split_decision(
+            &normal,
+            std::slice::from_ref(&scratch),
+            SplitDirection::Right
+        ),
+        SafeSplitDecision::NotifyBlocked
+    );
+    assert_eq!(
+        safe_split_decision(&normal, &[], SplitDirection::Down),
+        SafeSplitDecision::Split {
+            direction: SplitDirection::Down
+        }
+    );
+
+    assert_eq!(
+        split_pane_args(SplitDirection::Right),
+        vec![
+            "pane",
+            "split",
+            "--current",
+            "--direction",
+            "right",
+            "--focus"
+        ]
+    );
+    assert_eq!(
+        split_pane_args(SplitDirection::Down),
+        vec![
+            "pane",
+            "split",
+            "--current",
+            "--direction",
+            "down",
+            "--focus"
+        ]
+    );
+}
+
+#[test]
+fn marker_args_use_display_only_metadata_source() {
+    assert_eq!(
+        report_marker_args("p1", Scope::Workspace),
+        vec![
+            "pane",
+            "report-metadata",
+            "p1",
+            "--source",
+            "herdr-scratch-pane",
+            "--title",
+            "scratch running",
+            "--custom-status",
+            "scratch workspace",
+        ]
+    );
+    assert_eq!(
+        clear_marker_args("p1"),
+        vec![
+            "pane",
+            "report-metadata",
+            "p1",
+            "--source",
+            "herdr-scratch-pane",
+            "--clear-title",
+            "--clear-custom-status",
+        ]
+    );
+}
+
+#[test]
+fn marker_target_uses_recorded_host_then_workspace_fallback() {
+    let state = ScratchState {
+        scope: Scope::Workspace,
+        workspace_id: Some("w1".into()),
+        host_pane_id: "host".into(),
+        scratch_pane_id: Some("scratch".into()),
+    };
+    let host = PaneInfo {
+        pane_id: "host".into(),
+        workspace_id: Some("w1".into()),
+        cwd: None,
+        label: Some("main".into()),
+        focused: false,
+    };
+    let scratch = PaneInfo {
+        pane_id: "scratch".into(),
+        workspace_id: Some("w1".into()),
+        cwd: None,
+        label: Some("⌂ scratch workspace".into()),
+        focused: true,
+    };
+    assert_eq!(
+        choose_marker_target(Some(&state), &[scratch.clone(), host.clone()], &scratch),
+        Some("host".into())
+    );
+
+    let fallback = PaneInfo {
+        pane_id: "fallback".into(),
+        workspace_id: Some("w1".into()),
+        cwd: None,
+        label: Some("main".into()),
+        focused: false,
+    };
+    assert_eq!(
+        choose_marker_target(Some(&state), &[scratch], &fallback),
+        Some("fallback".into())
+    );
 }
 
 #[test]
