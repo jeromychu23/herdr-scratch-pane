@@ -13,10 +13,10 @@ impl Scope {
     }
 }
 
-pub fn floating_label(scope: Scope) -> &'static str {
+pub fn scratch_label(scope: Scope) -> &'static str {
     match scope {
-        Scope::Workspace => "⌂ floating workspace",
-        Scope::Session => "⌂ floating session",
+        Scope::Workspace => "⌂ scratch workspace",
+        Scope::Session => "⌂ scratch session",
     }
 }
 

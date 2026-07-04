@@ -1,5 +1,5 @@
 use crate::herdr::PaneInfo;
-use crate::scope::{floating_label, Scope};
+use crate::scope::{scratch_label, Scope};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToggleInputs {
@@ -18,7 +18,7 @@ pub enum ToggleDecision {
 }
 
 pub fn decide_toggle(input: ToggleInputs) -> ToggleDecision {
-    let target_label = floating_label(input.scope);
+    let target_label = scratch_label(input.scope);
     let current_workspace = input.current.workspace_id.as_deref();
 
     let target = input.panes.iter().find(|pane| {
@@ -38,7 +38,7 @@ pub fn decide_toggle(input: ToggleInputs) -> ToggleDecision {
     }
 
     if let Some(other_visible) = input.panes.iter().find(|pane| {
-        pane.focused && is_floating(pane) && pane.label.as_deref() != Some(target_label)
+        pane.focused && is_scratch(pane) && pane.label.as_deref() != Some(target_label)
     }) {
         return ToggleDecision::CloseThenOpen {
             close_pane_id: other_visible.pane_id.clone(),
@@ -61,9 +61,9 @@ pub fn decide_toggle(input: ToggleInputs) -> ToggleDecision {
     ToggleDecision::Open { scope: input.scope }
 }
 
-pub fn is_floating(pane: &PaneInfo) -> bool {
+pub fn is_scratch(pane: &PaneInfo) -> bool {
     matches!(
         pane.label.as_deref(),
-        Some("⌂ floating workspace") | Some("⌂ floating session")
+        Some("⌂ scratch workspace") | Some("⌂ scratch session")
     )
 }

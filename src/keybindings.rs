@@ -1,4 +1,4 @@
-pub const DEFAULT_KEYBINDINGS_MARKER: &str = "# herdr-floating-pane:keybindings";
+pub const DEFAULT_KEYBINDINGS_MARKER: &str = "# herdr-scratch-pane:keybindings";
 
 pub fn install_keybindings_text(
     existing: &str,
@@ -19,20 +19,20 @@ pub fn install_keybindings_text(
     next.push('\n');
     next.push_str(&binding_block(
         workspace_key,
-        "herdr-floating-pane.toggle-workspace",
-        "Toggle workspace floating pane",
+        "herdr-scratch-pane.toggle-workspace",
+        "Toggle workspace scratch pane",
     ));
     next.push('\n');
     next.push_str(&binding_block(
         session_key,
-        "herdr-floating-pane.toggle-session",
-        "Toggle session floating pane",
+        "herdr-scratch-pane.toggle-session",
+        "Toggle session scratch pane",
     ));
     next.push('\n');
     next.push_str(&binding_block(
         minimize_key,
-        "herdr-floating-pane.minimize-current",
-        "Minimize current floating pane",
+        "herdr-scratch-pane.minimize-current",
+        "Minimize current scratch pane",
     ));
     next
 }

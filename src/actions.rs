@@ -1,8 +1,8 @@
 use crate::herdr::PaneInfo;
-use crate::scope::{floating_label, Scope};
-use crate::toggle::is_floating;
+use crate::scope::{scratch_label, Scope};
+use crate::toggle::is_scratch;
 
-pub const PLUGIN_ID: &str = "herdr-floating-pane";
+pub const PLUGIN_ID: &str = "herdr-scratch-pane";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenPaneRequest {
@@ -40,13 +40,13 @@ pub fn open_pane_args(request: OpenPaneRequest) -> Vec<String> {
 
     args.push("--env".into());
     args.push(format!(
-        "HERDR_FLOATING_PANE_SCOPE={}",
+        "HERDR_SCRATCH_PANE_SCOPE={}",
         request.scope.as_str()
     ));
 
     if let Some(cwd) = request.cwd {
         args.push("--env".into());
-        args.push(format!("HERDR_FLOATING_PANE_CWD={cwd}"));
+        args.push(format!("HERDR_SCRATCH_PANE_CWD={cwd}"));
     }
 
     args
@@ -82,13 +82,13 @@ pub fn notification_args(message: &str) -> Vec<String> {
 }
 
 pub fn minimize_decision(current: &PaneInfo, panes: &[PaneInfo]) -> MinimizeDecision {
-    if is_floating(current) || current.label.as_deref() == Some(floating_label(Scope::Workspace)) {
+    if is_scratch(current) || current.label.as_deref() == Some(scratch_label(Scope::Workspace)) {
         return MinimizeDecision::Close {
             pane_id: current.pane_id.clone(),
         };
     }
 
-    if let Some(focused) = panes.iter().find(|pane| pane.focused && is_floating(pane)) {
+    if let Some(focused) = panes.iter().find(|pane| pane.focused && is_scratch(pane)) {
         return MinimizeDecision::Close {
             pane_id: focused.pane_id.clone(),
         };
@@ -98,12 +98,12 @@ pub fn minimize_decision(current: &PaneInfo, panes: &[PaneInfo]) -> MinimizeDeci
 }
 
 pub fn open_target_for_current(current: &PaneInfo) -> Option<String> {
-    (!is_floating(current)).then(|| current.pane_id.clone())
+    (!is_scratch(current)).then(|| current.pane_id.clone())
 }
 
 fn entrypoint(scope: Scope) -> &'static str {
     match scope {
-        Scope::Workspace => "workspace-floating",
-        Scope::Session => "session-floating",
+        Scope::Workspace => "workspace-scratch",
+        Scope::Session => "session-scratch",
     }
 }

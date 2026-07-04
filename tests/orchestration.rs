@@ -1,12 +1,12 @@
-use herdr_floating_pane::actions::{
+use herdr_scratch_pane::actions::{
     minimize_decision, open_pane_args, open_target_for_current, MinimizeDecision, OpenPaneRequest,
 };
-use herdr_floating_pane::herdr::{parse_opened_pane_id, PaneInfo};
-use herdr_floating_pane::keybindings::{install_keybindings_text, DEFAULT_KEYBINDINGS_MARKER};
-use herdr_floating_pane::scope::Scope;
+use herdr_scratch_pane::herdr::{parse_opened_pane_id, PaneInfo};
+use herdr_scratch_pane::keybindings::{install_keybindings_text, DEFAULT_KEYBINDINGS_MARKER};
+use herdr_scratch_pane::scope::Scope;
 
 #[test]
-fn open_pane_args_use_split_zoom_host_and_pass_scope_cwd_env() {
+fn open_pane_args_use_native_split_zoom_host_and_pass_scope_cwd_env() {
     let args = open_pane_args(OpenPaneRequest {
         scope: Scope::Workspace,
         target_pane_id: Some("p1".into()),
@@ -20,9 +20,9 @@ fn open_pane_args_use_split_zoom_host_and_pass_scope_cwd_env() {
             "pane",
             "open",
             "--plugin",
-            "herdr-floating-pane",
+            "herdr-scratch-pane",
             "--entrypoint",
-            "workspace-floating",
+            "workspace-scratch",
             "--placement",
             "split",
             "--direction",
@@ -31,9 +31,9 @@ fn open_pane_args_use_split_zoom_host_and_pass_scope_cwd_env() {
             "--target-pane",
             "p1",
             "--env",
-            "HERDR_FLOATING_PANE_SCOPE=workspace",
+            "HERDR_SCRATCH_PANE_SCOPE=workspace",
             "--env",
-            "HERDR_FLOATING_PANE_CWD=/tmp/proj",
+            "HERDR_SCRATCH_PANE_CWD=/tmp/proj",
         ]
     );
 }
@@ -46,9 +46,9 @@ fn session_open_pane_args_select_session_entrypoint_without_target_when_absent()
         cwd: None,
     });
 
-    assert!(args.contains(&"session-floating".to_string()));
+    assert!(args.contains(&"session-scratch".to_string()));
     assert!(!args.contains(&"--target-pane".to_string()));
-    assert!(args.contains(&"HERDR_FLOATING_PANE_SCOPE=session".to_string()));
+    assert!(args.contains(&"HERDR_SCRATCH_PANE_SCOPE=session".to_string()));
 }
 
 #[test]
@@ -57,25 +57,25 @@ fn keybinding_install_appends_once_and_preserves_existing_text() {
     let first = install_keybindings_text(initial, "prefix+f", "prefix+shift+f", "prefix+cmd+z");
     assert!(first.starts_with(initial));
     assert!(first.contains(DEFAULT_KEYBINDINGS_MARKER));
-    assert!(first.contains("command = \"herdr-floating-pane.toggle-workspace\""));
-    assert!(first.contains("command = \"herdr-floating-pane.toggle-session\""));
-    assert!(first.contains("command = \"herdr-floating-pane.minimize-current\""));
+    assert!(first.contains("command = \"herdr-scratch-pane.toggle-workspace\""));
+    assert!(first.contains("command = \"herdr-scratch-pane.toggle-session\""));
+    assert!(first.contains("command = \"herdr-scratch-pane.minimize-current\""));
 
     let second = install_keybindings_text(&first, "prefix+g", "prefix+shift+g", "prefix+alt+z");
     assert_eq!(first, second);
 }
 
 #[test]
-fn minimize_closes_current_or_focused_floating_pane_else_notifies() {
-    let current_floating = PaneInfo {
+fn minimize_closes_current_or_focused_scratch_pane_else_notifies() {
+    let current_scratch = PaneInfo {
         pane_id: "fw".into(),
         workspace_id: Some("w1".into()),
         cwd: None,
-        label: Some("⌂ floating workspace".into()),
+        label: Some("⌂ scratch workspace".into()),
         focused: true,
     };
     assert_eq!(
-        minimize_decision(&current_floating, &[]),
+        minimize_decision(&current_scratch, &[]),
         MinimizeDecision::Close {
             pane_id: "fw".into()
         }
@@ -92,7 +92,7 @@ fn minimize_closes_current_or_focused_floating_pane_else_notifies() {
         pane_id: "fs".into(),
         workspace_id: Some("w1".into()),
         cwd: None,
-        label: Some("⌂ floating session".into()),
+        label: Some("⌂ scratch session".into()),
         focused: true,
     };
     assert_eq!(
@@ -108,7 +108,7 @@ fn minimize_closes_current_or_focused_floating_pane_else_notifies() {
 }
 
 #[test]
-fn open_target_skips_current_pane_when_current_is_floating_and_about_to_close() {
+fn open_target_skips_current_pane_when_current_is_scratch_and_about_to_close() {
     let normal = PaneInfo {
         pane_id: "p1".into(),
         workspace_id: Some("w1".into()),
@@ -118,14 +118,14 @@ fn open_target_skips_current_pane_when_current_is_floating_and_about_to_close() 
     };
     assert_eq!(open_target_for_current(&normal), Some("p1".into()));
 
-    let floating = PaneInfo {
+    let scratch = PaneInfo {
         pane_id: "fw".into(),
         workspace_id: Some("w1".into()),
         cwd: None,
-        label: Some("⌂ floating workspace".into()),
+        label: Some("⌂ scratch workspace".into()),
         focused: true,
     };
-    assert_eq!(open_target_for_current(&floating), None);
+    assert_eq!(open_target_for_current(&scratch), None);
 }
 
 #[test]

@@ -1,29 +1,33 @@
-# herdr-floating-pane
+# herdr-scratch-pane
 
-A Rust Herdr plugin that provides tmux-floax style floating scratch panes.
+A Rust Herdr plugin for native zoomed scratch panes.
 
-It gives you two scopes:
+This is a fast toggleable shell pane, not a transparent floating overlay. It
+uses Herdr's native pane rendering so full-screen terminal apps such as `yazi`
+and `btop` keep their normal layout, mouse behavior, and terminal responses.
 
-- `prefix+f`: workspace-level floating pane
-- `prefix+shift+f`: session-level floating pane
-- `prefix+cmd+z`: minimize the currently visible floating pane
+## Keybindings
 
-Only one floating host pane is visible at a time. Workspace and session shells
-are separate `dtach` sessions, so they do not share cwd or running processes.
+- `prefix+f`: toggle workspace scratch pane
+- `prefix+shift+f`: toggle session scratch pane
+- `prefix+cmd+z`: minimize the currently visible scratch pane
+
+Only one scratch host pane is visible at a time. Workspace and session shells
+use separate `dtach` sessions, so they do not share cwd or running processes.
 
 ## How It Works
 
-Herdr's current plugin API can open `overlay` panes, but those views are
-transient for keybinding-launched plugin actions. To keep restore behavior
-floating-looking while preserving the shell process, this plugin opens a normal
-Herdr split pane, immediately zooms it, then runs a Rust TUI inside it. The TUI
-draws the floating box and embeds a real PTY shell inside that box.
+When you toggle a scratch pane, the plugin asks Herdr to open a normal split
+pane and immediately zooms it with `herdr pane zoom --on`. The process inside
+that pane is `dtach`, attached to a scope-specific session.
 
-Minimizing closes the Herdr host pane. The shell keeps running in `dtach`, and
-the next toggle reattaches to the same session.
+When you minimize, the Herdr host pane is closed. The shell and any running
+processes remain alive inside `dtach`. Toggling again opens a fresh host pane
+and reattaches to the same session.
 
-The backdrop around the box is drawn by the plugin. It is not a live dimmed view
-of the underlying Herdr panes because plugins cannot composite over other panes.
+This plugin intentionally does not use `ratatui`, `vt100`, embedded PTYs, or
+terminal mouse capture. Herdr remains responsible for terminal rendering,
+selection, mouse delivery, resize mode, and TUI compatibility.
 
 ## Requirements
 
@@ -43,7 +47,7 @@ brew install dtach
 ```sh
 herdr plugin link /Users/yuchu/GitHub/herdr-plugin/floating-pane
 cargo build --release
-./target/release/herdr-floating-pane install-keybindings
+./target/release/herdr-scratch-pane install-keybindings
 ```
 
 Then reload Herdr config or restart Herdr.
@@ -52,45 +56,25 @@ The installer appends an idempotent block to `~/.config/herdr/config.toml`.
 Manual equivalent:
 
 ```toml
-# herdr-floating-pane:keybindings
+# herdr-scratch-pane:keybindings
 [[keys.command]]
 key = "prefix+f"
 type = "plugin_action"
-command = "herdr-floating-pane.toggle-workspace"
-description = "Toggle workspace floating pane"
+command = "herdr-scratch-pane.toggle-workspace"
+description = "Toggle workspace scratch pane"
 
 [[keys.command]]
 key = "prefix+shift+f"
 type = "plugin_action"
-command = "herdr-floating-pane.toggle-session"
-description = "Toggle session floating pane"
+command = "herdr-scratch-pane.toggle-session"
+description = "Toggle session scratch pane"
 
 [[keys.command]]
 key = "prefix+cmd+z"
 type = "plugin_action"
-command = "herdr-floating-pane.minimize-current"
-description = "Minimize current floating pane"
+command = "herdr-scratch-pane.minimize-current"
+description = "Minimize current scratch pane"
 ```
-
-## Configuration
-
-Copy `floating-pane.toml.example` to:
-
-```sh
-$(herdr plugin config-dir herdr-floating-pane)/floating-pane.toml
-```
-
-The most important settings are:
-
-```toml
-width_pct = 94
-height_pct = 92
-backdrop = "#0d2b1d"
-forward_inner_mouse = true
-```
-
-Dragging the floating box border updates the global width/height config. The
-`[-]` control in the title bar minimizes the pane with the mouse.
 
 ## Trust And Security
 
@@ -101,22 +85,19 @@ runtime.
 It performs these local actions:
 
 - calls the `herdr` CLI to open, zoom, close, and inspect panes
-- starts `dtach` plus your login shell inside a PTY
-- reads/writes its plugin config and state directories
+- starts `dtach` plus your login shell directly in a Herdr pane
+- writes state under Herdr's plugin state directory for `dtach` sockets
 - writes `~/.config/herdr/config.toml` only when you explicitly run
   `install-keybindings`
-- enables terminal mouse capture while the floating pane is focused
 
 ## Limitations
 
-- The floating surface is app-drawn inside a zoomed split host pane, not a
-  native Herdr persistent overlay.
-- The backdrop is a solid fill, not your live panes dimmed behind the popup.
-- Inner mouse forwarding is best-effort. Border resize and `[-]` minimize are
-  handled by the plugin; clicks inside the embedded shell are translated to SGR
-  mouse sequences.
+- This is a native zoomed scratch pane, not a transparent overlay floating
+  above another visible pane.
+- It does not provide draggable floating-box resize or a mouse `[-]` button.
+  Use Herdr's native pane/zoom behavior instead.
 - `prefix+cmd+z` depends on your terminal forwarding `cmd/super` chords to
-  Herdr. If it does not, bind `herdr-floating-pane.minimize-current` to another
+  Herdr. If it does not, bind `herdr-scratch-pane.minimize-current` to another
   key.
 
 ## Development
@@ -128,6 +109,7 @@ cargo build --release
 
 ## Attribution
 
-This plugin selectively reuses MIT-licensed design ideas and implementation
-patterns from [Tyru5/herdr-floax](https://github.com/Tyru5/herdr-floax), and is
-inspired by [tmux-floax](https://github.com/omerxx/tmux-floax).
+This plugin was originally explored from a tmux-floax-style idea and compared
+against [Tyru5/herdr-floax](https://github.com/Tyru5/herdr-floax). The current
+implementation uses Herdr native pane rendering rather than an app-drawn
+floating box.

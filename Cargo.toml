@@ -1,29 +1,20 @@
 [package]
-name = "herdr-floating-pane"
+name = "herdr-scratch-pane"
 version = "0.1.0"
 edition = "2021"
-description = "A Rust floating scratch pane plugin for Herdr"
+description = "A native zoomed scratch pane plugin for Herdr"
 license = "MIT"
 
 [lib]
-name = "herdr_floating_pane"
+name = "herdr_scratch_pane"
 path = "src/lib.rs"
 
 [[bin]]
-name = "herdr-floating-pane"
+name = "herdr-scratch-pane"
 path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
-crossterm = "0.28"
-portable-pty = "0.8"
-ratatui = "0.29"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-signal-hook = "0.3"
-toml = "0.8"
-vt100 = "0.15"
-
-[dev-dependencies]
-tempfile = "3.13"

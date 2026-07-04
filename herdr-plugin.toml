@@ -1,13 +1,13 @@
-# herdr-floating-pane
+# herdr-scratch-pane
 #
-# A Rust Herdr plugin that provides tmux-floax style floating scratch panes.
-# The floating surface is app-drawn inside a zoomed split host pane because
-# Herdr's plugin overlay placement is transient in current v1 plugin APIs.
+# Native zoomed scratch panes for Herdr. The plugin does not draw its own
+# terminal UI; it lets Herdr render the pane directly so full-screen TUIs keep
+# their original behavior.
 
-id = "herdr-floating-pane"
-name = "herdr-floating-pane"
+id = "herdr-scratch-pane"
+name = "herdr-scratch-pane"
 version = "0.1.0"
-description = "Rust floating scratch panes for Herdr, inspired by tmux-floax."
+description = "Native zoomed scratch panes for Herdr."
 min_herdr_version = "0.7.1"
 platforms = ["macos"]
 
@@ -15,31 +15,31 @@ platforms = ["macos"]
 command = ["cargo", "build", "--release"]
 
 [[panes]]
-id = "workspace-floating"
-title = "⌂ floating workspace"
+id = "workspace-scratch"
+title = "⌂ scratch workspace"
 placement = "split"
-command = ["./target/release/herdr-floating-pane", "run-pane", "--scope", "workspace"]
+command = ["./target/release/herdr-scratch-pane", "run-pane", "--scope", "workspace"]
 
 [[panes]]
-id = "session-floating"
-title = "⌂ floating session"
+id = "session-scratch"
+title = "⌂ scratch session"
 placement = "split"
-command = ["./target/release/herdr-floating-pane", "run-pane", "--scope", "session"]
+command = ["./target/release/herdr-scratch-pane", "run-pane", "--scope", "session"]
 
 [[actions]]
 id = "toggle-workspace"
-title = "Toggle workspace floating pane"
-description = "Open, reveal, or minimize the floating pane for the current workspace."
-command = ["./target/release/herdr-floating-pane", "toggle", "--scope", "workspace"]
+title = "Toggle workspace scratch pane"
+description = "Open, reveal, or minimize the scratch pane for the current workspace."
+command = ["./target/release/herdr-scratch-pane", "toggle", "--scope", "workspace"]
 
 [[actions]]
 id = "toggle-session"
-title = "Toggle session floating pane"
-description = "Open, reveal, or minimize the session-global floating pane."
-command = ["./target/release/herdr-floating-pane", "toggle", "--scope", "session"]
+title = "Toggle session scratch pane"
+description = "Open, reveal, or minimize the session-global scratch pane."
+command = ["./target/release/herdr-scratch-pane", "toggle", "--scope", "session"]
 
 [[actions]]
 id = "minimize-current"
-title = "Minimize current floating pane"
-description = "Minimize whichever herdr-floating-pane host pane is visible."
-command = ["./target/release/herdr-floating-pane", "minimize"]
+title = "Minimize current scratch pane"
+description = "Minimize whichever herdr-scratch-pane host pane is visible."
+command = ["./target/release/herdr-scratch-pane", "minimize"]

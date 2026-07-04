@@ -1,9 +1,6 @@
 pub mod actions;
-pub mod config;
-pub mod geometry;
 pub mod herdr;
 pub mod keybindings;
-pub mod mouse;
 pub mod pane;
 pub mod scope;
 pub mod toggle;

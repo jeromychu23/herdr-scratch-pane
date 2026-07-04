@@ -5,16 +5,16 @@ use std::process::Command;
 
 use anyhow::{anyhow, bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use herdr_floating_pane::actions::{
+use herdr_scratch_pane::actions::{
     close_pane_args, minimize_decision, notification_args, open_pane_args, open_target_for_current,
     pane_current_args, pane_list_args, zoom_pane_args, MinimizeDecision, OpenPaneRequest,
 };
-use herdr_floating_pane::herdr::{
+use herdr_scratch_pane::herdr::{
     parse_current_pane, parse_opened_pane_id, parse_pane_list, PaneInfo,
 };
-use herdr_floating_pane::keybindings::install_keybindings_text;
-use herdr_floating_pane::scope::Scope;
-use herdr_floating_pane::toggle::{decide_toggle, ToggleDecision, ToggleInputs};
+use herdr_scratch_pane::keybindings::install_keybindings_text;
+use herdr_scratch_pane::scope::Scope;
+use herdr_scratch_pane::toggle::{decide_toggle, ToggleDecision, ToggleInputs};
 
 #[derive(Debug, Parser)]
 #[command(author, version, about)]
@@ -63,7 +63,7 @@ impl From<CliScope> for Scope {
 
 fn main() {
     if let Err(error) = run() {
-        eprintln!("herdr-floating-pane: {error:#}");
+        eprintln!("herdr-scratch-pane: {error:#}");
         std::process::exit(1);
     }
 }
@@ -79,7 +79,7 @@ fn run() -> Result<()> {
             minimize_key,
             config,
         } => install_keybindings(config, &workspace_key, &session_key, &minimize_key),
-        Commands::RunPane { scope } => herdr_floating_pane::pane::run(scope.into()),
+        Commands::RunPane { scope } => herdr_scratch_pane::pane::run(scope.into()),
     }
 }
 
@@ -117,7 +117,7 @@ fn minimize() -> Result<()> {
         MinimizeDecision::Close { pane_id } => herdr.run(close_pane_args(&pane_id)).map(|_| ()),
         MinimizeDecision::NotifyNoVisiblePane => herdr
             .run(notification_args(
-                "No visible herdr-floating-pane to minimize",
+                "No visible herdr-scratch-pane to minimize",
             ))
             .map(|_| ()),
     }
