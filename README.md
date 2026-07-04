@@ -28,8 +28,9 @@ processes remain alive inside `dtach`. Toggling again opens a fresh host pane
 and reattaches to the same session.
 
 Because the host pane is closed while the `dtach` session keeps running, the
-plugin reports display-only Herdr pane metadata on the original host pane:
-`scratch running`. Revealing the scratch pane clears that marker.
+plugin marks the workspace label with ` [scratch-on]`. Revealing the scratch
+pane restores the original workspace label. If the workspace is renamed by hand
+while scratch is hidden, the plugin leaves the user's new label alone.
 
 The keybinding installer also rewires Herdr's split keys through plugin actions.
 Outside scratch panes, the proxy delegates to `herdr pane split --current`.
@@ -117,7 +118,8 @@ runtime.
 It performs these local actions:
 
 - calls the `herdr` CLI to open, zoom, close, and inspect panes
-- calls `herdr pane report-metadata` for the background scratch marker
+- calls `herdr workspace get` and `herdr workspace rename` for the background
+  scratch marker
 - starts `dtach` plus your login shell directly in a Herdr pane
 - writes state under Herdr's plugin state directory for `dtach` sockets
 - writes `~/.config/herdr/config.toml` only when you explicitly run

@@ -6,19 +6,21 @@ use std::process::Command;
 use anyhow::{anyhow, bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use herdr_scratch_pane::actions::{
-    clear_marker_args, close_pane_args, minimize_decision, notification_args, open_pane_args,
-    open_target_for_current, pane_current_args, pane_list_args, report_marker_args,
-    safe_split_decision, split_pane_args, zoom_pane_args, MinimizeDecision, OpenPaneRequest,
-    SafeSplitDecision, SplitDirection,
+    clear_legacy_marker_args, close_pane_args, minimize_decision, notification_args,
+    open_pane_args, open_target_for_current, pane_current_args, pane_list_args,
+    safe_split_decision, split_pane_args, workspace_get_args, workspace_rename_args,
+    zoom_pane_args, MinimizeDecision, OpenPaneRequest, SafeSplitDecision, SplitDirection,
 };
 use herdr_scratch_pane::herdr::{
-    parse_current_pane, parse_opened_pane_id, parse_pane_list, PaneInfo,
+    parse_current_pane, parse_opened_pane_id, parse_pane_list, parse_workspace_get, PaneInfo,
+    WorkspaceInfo,
 };
 use herdr_scratch_pane::keybindings::install_keybindings_text;
 use herdr_scratch_pane::scope::Scope;
 use herdr_scratch_pane::status::{
-    choose_marker_target, default_state_dir, dtach_socket_path, read_state, remove_state,
-    state_path, write_state, ScratchState,
+    choose_marker_target, default_state_dir, dtach_socket_path, marked_workspace_label,
+    original_workspace_label, read_state, remove_state, restore_workspace_label, state_path,
+    write_state, ScratchState,
 };
 use herdr_scratch_pane::toggle::{decide_toggle, ToggleDecision, ToggleInputs};
 
@@ -184,7 +186,13 @@ fn safe_split(direction: SplitDirection) -> Result<()> {
     let herdr = Herdr::from_env();
     let current = current_pane(&herdr)?;
     let panes = pane_list(&herdr).unwrap_or_default();
-    match safe_split_decision(&current, &panes, direction) {
+    let visible_scratch_pane_id = visible_scratch_pane_id_from_state(&current, &panes);
+    match safe_split_decision(
+        &current,
+        &panes,
+        visible_scratch_pane_id.as_deref(),
+        direction,
+    ) {
         SafeSplitDecision::Split { direction } => herdr.run(split_pane_args(direction)).map(|_| ()),
         SafeSplitDecision::NotifyBlocked => herdr
             .run(notification_args("Scratch pane split is disabled"))
@@ -213,6 +221,8 @@ fn open_and_zoom(herdr: &Herdr, scope: Scope, current: &PaneInfo) -> Result<()> 
         host_pane_id: choose_marker_target(None, &panes, current)
             .unwrap_or_else(|| current.pane_id.clone()),
         scratch_pane_id: Some(pane_id.clone()),
+        original_workspace_label: None,
+        marked_workspace_label: None,
     };
     write_state(&state_file(scope, current.workspace_id.as_deref()), &state)?;
     herdr.run(zoom_pane_args(&pane_id)).map(|_| ())
@@ -226,14 +236,25 @@ fn close_scratch_and_mark(
     panes: &[PaneInfo],
 ) -> Result<()> {
     let state_path = state_file(scope, current.workspace_id.as_deref());
-    let state = read_state(&state_path).unwrap_or_default();
-    let marker_target = choose_marker_target(state.as_ref(), panes, current);
+    let mut state = read_state(&state_path)
+        .unwrap_or_default()
+        .unwrap_or(ScratchState {
+            scope,
+            workspace_id: current.workspace_id.clone(),
+            host_pane_id: current.pane_id.clone(),
+            scratch_pane_id: Some(pane_id.to_string()),
+            original_workspace_label: None,
+            marked_workspace_label: None,
+        });
+    let marker_target = choose_marker_target(Some(&state), panes, current);
 
     herdr.run(close_pane_args(pane_id))?;
 
     if let Some(target) = marker_target {
-        let _ = herdr.run(report_marker_args(&target, scope));
+        let _ = herdr.run(clear_legacy_marker_args(&target));
     }
+    mark_workspace_label(herdr, &mut state, current.workspace_id.as_deref())?;
+    write_state(&state_path, &state)?;
     Ok(())
 }
 
@@ -245,10 +266,11 @@ fn clear_background_marker(
 ) -> Result<()> {
     let path = state_file(scope, current.workspace_id.as_deref());
     let state = read_state(&path).unwrap_or_default();
-    if let Some(state) = state.as_ref() {
-        if let Some(target) = choose_marker_target(Some(state), panes, current) {
-            let _ = herdr.run(clear_marker_args(&target));
+    if let Some(mut state) = state {
+        if let Some(target) = choose_marker_target(Some(&state), panes, current) {
+            let _ = herdr.run(clear_legacy_marker_args(&target));
         }
+        let _ = restore_workspace_marker(herdr, &mut state, current.workspace_id.as_deref());
 
         let state_dir = default_state_dir();
         let socket = dtach_socket_path(
@@ -262,8 +284,61 @@ fn clear_background_marker(
         );
         if !socket.exists() {
             remove_state(&path)?;
+        } else {
+            write_state(&path, &state)?;
         }
     }
+    Ok(())
+}
+
+fn mark_workspace_label(
+    herdr: &Herdr,
+    state: &mut ScratchState,
+    fallback_workspace_id: Option<&str>,
+) -> Result<()> {
+    let Some(workspace_id) = state.workspace_id.as_deref().or(fallback_workspace_id) else {
+        return Ok(());
+    };
+
+    let workspace = workspace_info(herdr, workspace_id)?;
+    let current_label = workspace
+        .label
+        .as_deref()
+        .unwrap_or(workspace.workspace_id.as_str());
+    let original = state
+        .original_workspace_label
+        .clone()
+        .unwrap_or_else(|| original_workspace_label(current_label));
+    let marked = marked_workspace_label(&original);
+
+    if current_label != marked {
+        herdr.run(workspace_rename_args(workspace_id, &marked))?;
+    }
+    state.workspace_id = Some(workspace_id.to_string());
+    state.original_workspace_label = Some(original);
+    state.marked_workspace_label = Some(marked);
+    Ok(())
+}
+
+fn restore_workspace_marker(
+    herdr: &Herdr,
+    state: &mut ScratchState,
+    fallback_workspace_id: Option<&str>,
+) -> Result<()> {
+    let Some(workspace_id) = state.workspace_id.as_deref().or(fallback_workspace_id) else {
+        state.original_workspace_label = None;
+        state.marked_workspace_label = None;
+        return Ok(());
+    };
+
+    let workspace = workspace_info(herdr, workspace_id)?;
+    if let Some(label) = workspace.label.as_deref() {
+        if let Some(original) = restore_workspace_label(state, label) {
+            herdr.run(workspace_rename_args(workspace_id, &original))?;
+        }
+    }
+    state.original_workspace_label = None;
+    state.marked_workspace_label = None;
     Ok(())
 }
 
@@ -271,6 +346,25 @@ fn state_file(scope: Scope, workspace_id: Option<&str>) -> PathBuf {
     let state_dir = default_state_dir();
     let server_id = std::env::var("HERDR_SERVER_ID").ok();
     state_path(&state_dir, scope, workspace_id, server_id.as_deref())
+}
+
+fn visible_scratch_pane_id_from_state(current: &PaneInfo, panes: &[PaneInfo]) -> Option<String> {
+    let state_dir = default_state_dir();
+    let server_id = std::env::var("HERDR_SERVER_ID").ok();
+
+    [Scope::Workspace, Scope::Session]
+        .into_iter()
+        .filter_map(|scope| {
+            let path = state_path(
+                &state_dir,
+                scope,
+                current.workspace_id.as_deref(),
+                server_id.as_deref(),
+            );
+            read_state(&path).ok().flatten()
+        })
+        .filter_map(|state| state.scratch_pane_id)
+        .find(|scratch_pane_id| panes.iter().any(|pane| pane.pane_id == *scratch_pane_id))
 }
 
 fn scope_from_scratch_pane(pane: &PaneInfo) -> Option<Scope> {
@@ -289,6 +383,11 @@ fn current_pane(herdr: &Herdr) -> Result<PaneInfo> {
 fn pane_list(herdr: &Herdr) -> Result<Vec<PaneInfo>> {
     let stdout = herdr.run(pane_list_args())?;
     parse_pane_list(&stdout).context("failed to parse `herdr pane list` output")
+}
+
+fn workspace_info(herdr: &Herdr, workspace_id: &str) -> Result<WorkspaceInfo> {
+    let stdout = herdr.run(workspace_get_args(workspace_id))?;
+    parse_workspace_get(&stdout).context("failed to parse `herdr workspace get` output")
 }
 
 fn install_keybindings(

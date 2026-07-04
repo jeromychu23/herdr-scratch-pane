@@ -1,4 +1,6 @@
-use herdr_scratch_pane::herdr::{parse_current_pane, parse_pane_list, PaneInfo};
+use herdr_scratch_pane::herdr::{
+    parse_current_pane, parse_pane_list, parse_workspace_get, PaneInfo,
+};
 use herdr_scratch_pane::scope::{scratch_label, session_name, Scope};
 use herdr_scratch_pane::toggle::{decide_toggle, ToggleDecision, ToggleInputs};
 
@@ -21,6 +23,17 @@ fn herdr_json_parsing_accepts_current_and_list_shapes() {
     assert_eq!(panes.len(), 2);
     assert_eq!(panes[1].label.as_deref(), Some("⌂ scratch workspace"));
     assert!(panes[1].focused);
+}
+
+#[test]
+fn workspace_json_parsing_accepts_get_shape() {
+    let workspace = parse_workspace_get(
+        r#"{"result":{"type":"workspace_info","workspace":{"workspace_id":"wB","label":"floating-pane","focused":true}}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(workspace.workspace_id, "wB");
+    assert_eq!(workspace.label.as_deref(), Some("floating-pane"));
 }
 
 #[test]

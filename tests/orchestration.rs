@@ -1,12 +1,14 @@
 use herdr_scratch_pane::actions::{
-    clear_marker_args, minimize_decision, open_pane_args, open_target_for_current,
-    report_marker_args, safe_split_decision, split_pane_args, MinimizeDecision, OpenPaneRequest,
+    minimize_decision, open_pane_args, open_target_for_current, safe_split_decision,
+    split_pane_args, workspace_get_args, workspace_rename_args, MinimizeDecision, OpenPaneRequest,
     SafeSplitDecision, SplitDirection,
 };
 use herdr_scratch_pane::herdr::{parse_opened_pane_id, PaneInfo};
 use herdr_scratch_pane::keybindings::{install_keybindings_text, DEFAULT_KEYBINDINGS_MARKER};
 use herdr_scratch_pane::scope::Scope;
-use herdr_scratch_pane::status::{choose_marker_target, ScratchState};
+use herdr_scratch_pane::status::{
+    choose_marker_target, marked_workspace_label, restore_workspace_label, ScratchState,
+};
 
 #[test]
 fn open_pane_args_use_native_split_zoom_host_and_pass_scope_cwd_env() {
@@ -100,7 +102,7 @@ fn safe_split_blocks_scratch_and_delegates_normal_panes() {
         focused: true,
     };
     assert_eq!(
-        safe_split_decision(&scratch, &[], SplitDirection::Right),
+        safe_split_decision(&scratch, &[], None, SplitDirection::Right),
         SafeSplitDecision::NotifyBlocked
     );
 
@@ -115,12 +117,29 @@ fn safe_split_blocks_scratch_and_delegates_normal_panes() {
         safe_split_decision(
             &normal,
             std::slice::from_ref(&scratch),
+            None,
             SplitDirection::Right
         ),
         SafeSplitDecision::NotifyBlocked
     );
+    let unlabeled_scratch = PaneInfo {
+        pane_id: "scratch-from-state".into(),
+        workspace_id: Some("w1".into()),
+        cwd: None,
+        label: None,
+        focused: false,
+    };
     assert_eq!(
-        safe_split_decision(&normal, &[], SplitDirection::Down),
+        safe_split_decision(
+            &normal,
+            std::slice::from_ref(&unlabeled_scratch),
+            Some("scratch-from-state"),
+            SplitDirection::Right,
+        ),
+        SafeSplitDecision::NotifyBlocked
+    );
+    assert_eq!(
+        safe_split_decision(&normal, &[], None, SplitDirection::Down),
         SafeSplitDecision::Split {
             direction: SplitDirection::Down
         }
@@ -151,32 +170,54 @@ fn safe_split_blocks_scratch_and_delegates_normal_panes() {
 }
 
 #[test]
-fn marker_args_use_display_only_metadata_source() {
+fn workspace_marker_args_use_workspace_get_and_rename() {
+    assert_eq!(workspace_get_args("w1"), vec!["workspace", "get", "w1"]);
     assert_eq!(
-        report_marker_args("p1", Scope::Workspace),
-        vec![
-            "pane",
-            "report-metadata",
-            "p1",
-            "--source",
-            "herdr-scratch-pane",
-            "--title",
-            "scratch running",
-            "--custom-status",
-            "scratch workspace",
-        ]
+        workspace_rename_args("w1", "floating-pane [scratch-on]"),
+        vec!["workspace", "rename", "w1", "floating-pane [scratch-on]"]
+    );
+}
+
+#[test]
+fn workspace_marker_appends_suffix_once() {
+    assert_eq!(
+        marked_workspace_label("floating-pane"),
+        "floating-pane [scratch-on]"
     );
     assert_eq!(
-        clear_marker_args("p1"),
-        vec![
-            "pane",
-            "report-metadata",
-            "p1",
-            "--source",
-            "herdr-scratch-pane",
-            "--clear-title",
-            "--clear-custom-status",
-        ]
+        marked_workspace_label("floating-pane [scratch-on]"),
+        "floating-pane [scratch-on]"
+    );
+}
+
+#[test]
+fn workspace_marker_restores_only_plugin_written_label() {
+    let state = ScratchState {
+        scope: Scope::Workspace,
+        workspace_id: Some("w1".into()),
+        host_pane_id: "host".into(),
+        scratch_pane_id: Some("scratch".into()),
+        original_workspace_label: Some("floating-pane".into()),
+        marked_workspace_label: Some("floating-pane [scratch-on]".into()),
+    };
+
+    assert_eq!(
+        restore_workspace_label(&state, "floating-pane [scratch-on]"),
+        Some("floating-pane".into())
+    );
+    assert_eq!(restore_workspace_label(&state, "renamed-by-user"), None);
+
+    let stale_state = ScratchState {
+        scope: Scope::Workspace,
+        workspace_id: Some("w1".into()),
+        host_pane_id: "host".into(),
+        scratch_pane_id: Some("scratch".into()),
+        original_workspace_label: None,
+        marked_workspace_label: None,
+    };
+    assert_eq!(
+        restore_workspace_label(&stale_state, "floating-pane [scratch-on]"),
+        Some("floating-pane".into())
     );
 }
 
@@ -187,6 +228,8 @@ fn marker_target_uses_recorded_host_then_workspace_fallback() {
         workspace_id: Some("w1".into()),
         host_pane_id: "host".into(),
         scratch_pane_id: Some("scratch".into()),
+        original_workspace_label: None,
+        marked_workspace_label: None,
     };
     let host = PaneInfo {
         pane_id: "host".into(),

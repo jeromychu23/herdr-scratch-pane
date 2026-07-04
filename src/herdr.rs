@@ -13,6 +13,13 @@ pub struct PaneInfo {
     pub focused: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct WorkspaceInfo {
+    pub workspace_id: String,
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 struct CurrentPaneResponse {
     result: CurrentPaneResult,
@@ -34,12 +41,26 @@ struct PaneListResult {
     panes: Vec<PaneInfo>,
 }
 
+#[derive(Debug, Deserialize)]
+struct WorkspaceGetResponse {
+    result: WorkspaceGetResult,
+}
+
+#[derive(Debug, Deserialize)]
+struct WorkspaceGetResult {
+    workspace: WorkspaceInfo,
+}
+
 pub fn parse_current_pane(input: &str) -> serde_json::Result<PaneInfo> {
     serde_json::from_str::<CurrentPaneResponse>(input).map(|response| response.result.pane)
 }
 
 pub fn parse_pane_list(input: &str) -> serde_json::Result<Vec<PaneInfo>> {
     serde_json::from_str::<PaneListResponse>(input).map(|response| response.result.panes)
+}
+
+pub fn parse_workspace_get(input: &str) -> serde_json::Result<WorkspaceInfo> {
+    serde_json::from_str::<WorkspaceGetResponse>(input).map(|response| response.result.workspace)
 }
 
 pub fn parse_opened_pane_id(input: &str) -> Option<String> {

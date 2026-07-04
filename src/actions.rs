@@ -98,6 +98,19 @@ pub fn pane_get_args(pane_id: &str) -> Vec<String> {
     vec!["pane".into(), "get".into(), pane_id.into()]
 }
 
+pub fn workspace_get_args(workspace_id: &str) -> Vec<String> {
+    vec!["workspace".into(), "get".into(), workspace_id.into()]
+}
+
+pub fn workspace_rename_args(workspace_id: &str, label: &str) -> Vec<String> {
+    vec![
+        "workspace".into(),
+        "rename".into(),
+        workspace_id.into(),
+        label.into(),
+    ]
+}
+
 pub fn notification_args(message: &str) -> Vec<String> {
     vec!["notification".into(), "show".into(), message.into()]
 }
@@ -113,21 +126,7 @@ pub fn split_pane_args(direction: SplitDirection) -> Vec<String> {
     ]
 }
 
-pub fn report_marker_args(pane_id: &str, scope: Scope) -> Vec<String> {
-    vec![
-        "pane".into(),
-        "report-metadata".into(),
-        pane_id.into(),
-        "--source".into(),
-        PLUGIN_ID.into(),
-        "--title".into(),
-        "scratch running".into(),
-        "--custom-status".into(),
-        format!("scratch {}", scope.as_str()),
-    ]
-}
-
-pub fn clear_marker_args(pane_id: &str) -> Vec<String> {
+pub fn clear_legacy_marker_args(pane_id: &str) -> Vec<String> {
     vec![
         "pane".into(),
         "report-metadata".into(),
@@ -142,9 +141,17 @@ pub fn clear_marker_args(pane_id: &str) -> Vec<String> {
 pub fn safe_split_decision(
     current: &PaneInfo,
     panes: &[PaneInfo],
+    visible_scratch_pane_id: Option<&str>,
     direction: SplitDirection,
 ) -> SafeSplitDecision {
-    if is_scratch(current) || panes.iter().any(|pane| pane.focused && is_scratch(pane)) {
+    let state_scratch_is_visible = visible_scratch_pane_id
+        .map(|scratch_pane_id| panes.iter().any(|pane| pane.pane_id == scratch_pane_id))
+        .unwrap_or(false);
+
+    if is_scratch(current)
+        || panes.iter().any(|pane| pane.focused && is_scratch(pane))
+        || state_scratch_is_visible
+    {
         SafeSplitDecision::NotifyBlocked
     } else {
         SafeSplitDecision::Split { direction }

@@ -9,12 +9,46 @@ use crate::herdr::PaneInfo;
 use crate::scope::{session_name, Scope};
 use crate::toggle::is_scratch;
 
+pub const WORKSPACE_MARKER_SUFFIX: &str = " [scratch-on]";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScratchState {
     pub scope: Scope,
     pub workspace_id: Option<String>,
     pub host_pane_id: String,
     pub scratch_pane_id: Option<String>,
+    #[serde(default)]
+    pub original_workspace_label: Option<String>,
+    #[serde(default)]
+    pub marked_workspace_label: Option<String>,
+}
+
+pub fn marked_workspace_label(label: &str) -> String {
+    if label.ends_with(WORKSPACE_MARKER_SUFFIX) {
+        label.to_string()
+    } else {
+        format!("{label}{WORKSPACE_MARKER_SUFFIX}")
+    }
+}
+
+pub fn original_workspace_label(label: &str) -> String {
+    label
+        .strip_suffix(WORKSPACE_MARKER_SUFFIX)
+        .unwrap_or(label)
+        .to_string()
+}
+
+pub fn restore_workspace_label(state: &ScratchState, current_label: &str) -> Option<String> {
+    match (
+        state.original_workspace_label.as_deref(),
+        state.marked_workspace_label.as_deref(),
+    ) {
+        (Some(original), Some(marked)) if current_label == marked => Some(original.to_string()),
+        (None, None) if current_label.ends_with(WORKSPACE_MARKER_SUFFIX) => {
+            Some(original_workspace_label(current_label))
+        }
+        _ => None,
+    }
 }
 
 pub fn choose_marker_target(
