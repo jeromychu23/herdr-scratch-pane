@@ -1,6 +1,4 @@
-use crate::herdr::PaneInfo;
-use crate::scope::{scratch_label, Scope};
-use crate::toggle::is_scratch;
+use crate::scope::Scope;
 
 pub const PLUGIN_ID: &str = "herdr-scratch-pane";
 
@@ -9,12 +7,6 @@ pub struct OpenPaneRequest {
     pub scope: Scope,
     pub target_pane_id: Option<String>,
     pub cwd: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MinimizeDecision {
-    Close { pane_id: String },
-    NotifyNoVisiblePane,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,12 +22,6 @@ impl SplitDirection {
             Self::Down => "down",
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SafeSplitDecision {
-    Split { direction: SplitDirection },
-    NotifyBlocked,
 }
 
 pub fn open_pane_args(request: OpenPaneRequest) -> Vec<String> {
@@ -94,10 +80,6 @@ pub fn pane_current_args() -> Vec<String> {
     vec!["pane".into(), "current".into()]
 }
 
-pub fn pane_get_args(pane_id: &str) -> Vec<String> {
-    vec!["pane".into(), "get".into(), pane_id.into()]
-}
-
 pub fn workspace_get_args(workspace_id: &str) -> Vec<String> {
     vec!["workspace".into(), "get".into(), workspace_id.into()]
 }
@@ -126,6 +108,11 @@ pub fn split_pane_args(direction: SplitDirection) -> Vec<String> {
     ]
 }
 
+/// Clears pane metadata written by early floating-pane prototypes.
+///
+/// New scratch state is represented by workspace labels and JSON state files;
+/// this command exists only to remove stale titles/custom status from users who
+/// tested older builds.
 pub fn clear_legacy_marker_args(pane_id: &str) -> Vec<String> {
     vec![
         "pane".into(),
@@ -136,46 +123,6 @@ pub fn clear_legacy_marker_args(pane_id: &str) -> Vec<String> {
         "--clear-title".into(),
         "--clear-custom-status".into(),
     ]
-}
-
-pub fn safe_split_decision(
-    current: &PaneInfo,
-    panes: &[PaneInfo],
-    visible_scratch_pane_id: Option<&str>,
-    direction: SplitDirection,
-) -> SafeSplitDecision {
-    let state_scratch_is_visible = visible_scratch_pane_id
-        .map(|scratch_pane_id| panes.iter().any(|pane| pane.pane_id == scratch_pane_id))
-        .unwrap_or(false);
-
-    if is_scratch(current)
-        || panes.iter().any(|pane| pane.focused && is_scratch(pane))
-        || state_scratch_is_visible
-    {
-        SafeSplitDecision::NotifyBlocked
-    } else {
-        SafeSplitDecision::Split { direction }
-    }
-}
-
-pub fn minimize_decision(current: &PaneInfo, panes: &[PaneInfo]) -> MinimizeDecision {
-    if is_scratch(current) || current.label.as_deref() == Some(scratch_label(Scope::Workspace)) {
-        return MinimizeDecision::Close {
-            pane_id: current.pane_id.clone(),
-        };
-    }
-
-    if let Some(focused) = panes.iter().find(|pane| pane.focused && is_scratch(pane)) {
-        return MinimizeDecision::Close {
-            pane_id: focused.pane_id.clone(),
-        };
-    }
-
-    MinimizeDecision::NotifyNoVisiblePane
-}
-
-pub fn open_target_for_current(current: &PaneInfo) -> Option<String> {
-    (!is_scratch(current)).then(|| current.pane_id.clone())
 }
 
 fn entrypoint(scope: Scope) -> &'static str {

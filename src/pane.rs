@@ -4,7 +4,7 @@ use std::process::Command;
 use anyhow::{bail, Context, Result};
 
 use crate::scope::{session_name, Scope};
-use crate::status::default_state_dir;
+use crate::state::default_state_dir;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DtachCommand {

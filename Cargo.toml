@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 description = "A native zoomed scratch pane plugin for Herdr"
 license = "MIT"
+readme = "README.md"
+keywords = ["herdr", "plugin", "scratch-pane", "dtach"]
+categories = ["command-line-utilities"]
 
 [lib]
 name = "herdr_scratch_pane"

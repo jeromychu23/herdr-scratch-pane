@@ -1,3 +1,4 @@
+use crate::commands::SplitDirection;
 use crate::herdr::PaneInfo;
 use crate::scope::{scratch_label, Scope};
 
@@ -15,6 +16,18 @@ pub enum ToggleDecision {
     Reveal { pane_id: String },
     Close { pane_id: String },
     CloseThenOpen { close_pane_id: String, scope: Scope },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MinimizeDecision {
+    Close { pane_id: String },
+    NotifyNoVisiblePane,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SafeSplitDecision {
+    Split { direction: SplitDirection },
+    NotifyBlocked,
 }
 
 pub fn decide_toggle(input: ToggleInputs) -> ToggleDecision {
@@ -59,6 +72,46 @@ pub fn decide_toggle(input: ToggleInputs) -> ToggleDecision {
     }
 
     ToggleDecision::Open { scope: input.scope }
+}
+
+pub fn safe_split_decision(
+    current: &PaneInfo,
+    panes: &[PaneInfo],
+    visible_scratch_pane_id: Option<&str>,
+    direction: SplitDirection,
+) -> SafeSplitDecision {
+    let state_scratch_is_visible = visible_scratch_pane_id
+        .map(|scratch_pane_id| panes.iter().any(|pane| pane.pane_id == scratch_pane_id))
+        .unwrap_or(false);
+
+    if is_scratch(current)
+        || panes.iter().any(|pane| pane.focused && is_scratch(pane))
+        || state_scratch_is_visible
+    {
+        SafeSplitDecision::NotifyBlocked
+    } else {
+        SafeSplitDecision::Split { direction }
+    }
+}
+
+pub fn minimize_decision(current: &PaneInfo, panes: &[PaneInfo]) -> MinimizeDecision {
+    if is_scratch(current) || current.label.as_deref() == Some(scratch_label(Scope::Workspace)) {
+        return MinimizeDecision::Close {
+            pane_id: current.pane_id.clone(),
+        };
+    }
+
+    if let Some(focused) = panes.iter().find(|pane| pane.focused && is_scratch(pane)) {
+        return MinimizeDecision::Close {
+            pane_id: focused.pane_id.clone(),
+        };
+    }
+
+    MinimizeDecision::NotifyNoVisiblePane
+}
+
+pub fn open_target_for_current(current: &PaneInfo) -> Option<String> {
+    (!is_scratch(current)).then(|| current.pane_id.clone())
 }
 
 pub fn is_scratch(pane: &PaneInfo) -> bool {

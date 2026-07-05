@@ -1,8 +1,8 @@
+use herdr_scratch_pane::decisions::{decide_toggle, ToggleDecision, ToggleInputs};
 use herdr_scratch_pane::herdr::{
     parse_current_pane, parse_pane_list, parse_workspace_get, PaneInfo,
 };
 use herdr_scratch_pane::scope::{scratch_label, session_name, Scope};
-use herdr_scratch_pane::toggle::{decide_toggle, ToggleDecision, ToggleInputs};
 
 #[test]
 fn herdr_json_parsing_accepts_current_and_list_shapes() {

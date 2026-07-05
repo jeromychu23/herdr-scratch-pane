@@ -144,8 +144,15 @@ fn managed_command_keys(commands: &ArrayOfTables, command: &str) -> Option<Vec<S
 
 fn is_managed_command(table: &Table) -> bool {
     command_value(table)
-        .map(|command| command.starts_with("herdr-scratch-pane."))
+        .map(is_known_managed_command)
         .unwrap_or(false)
+}
+
+fn is_known_managed_command(command: &str) -> bool {
+    matches!(
+        command,
+        TOGGLE_WORKSPACE | TOGGLE_SESSION | MINIMIZE_CURRENT | SAFE_SPLIT_RIGHT | SAFE_SPLIT_DOWN
+    )
 }
 
 fn command_value(table: &Table) -> Option<&str> {

@@ -1,13 +1,17 @@
-use herdr_scratch_pane::actions::{
-    minimize_decision, open_pane_args, open_target_for_current, safe_split_decision,
-    split_pane_args, workspace_get_args, workspace_rename_args, MinimizeDecision, OpenPaneRequest,
-    SafeSplitDecision, SplitDirection,
+use herdr_scratch_pane::commands::{
+    open_pane_args, split_pane_args, workspace_get_args, workspace_rename_args, OpenPaneRequest,
+    SplitDirection,
+};
+use herdr_scratch_pane::decisions::{
+    minimize_decision, open_target_for_current, safe_split_decision, MinimizeDecision,
+    SafeSplitDecision,
 };
 use herdr_scratch_pane::herdr::{parse_opened_pane_id, PaneInfo};
 use herdr_scratch_pane::keybindings::{install_keybindings_text, DEFAULT_KEYBINDINGS_MARKER};
 use herdr_scratch_pane::scope::Scope;
-use herdr_scratch_pane::status::{
-    choose_marker_target, marked_workspace_label, restore_workspace_label, ScratchState,
+use herdr_scratch_pane::state::ScratchState;
+use herdr_scratch_pane::workspace_marker::{
+    legacy_marker_cleanup_target, marked_workspace_label, restore_workspace_label,
 };
 
 #[test]
@@ -90,6 +94,26 @@ fn keybinding_install_can_skip_split_proxy() {
     assert!(updated.contains("split_horizontal = \"prefix+-\""));
     assert!(!updated.contains("herdr-scratch-pane.safe-split-right"));
     assert!(!updated.contains("herdr-scratch-pane.safe-split-down"));
+}
+
+#[test]
+fn keybinding_install_preserves_custom_plugin_actions() {
+    let initial = r#"[keys]
+
+[[keys.command]]
+key = "prefix+x"
+type = "plugin_action"
+command = "herdr-scratch-pane.custom-action"
+description = "Custom scratch action"
+"#;
+
+    let updated =
+        install_keybindings_text(initial, "prefix+f", "prefix+shift+f", "prefix+cmd+z", true)
+            .unwrap();
+
+    assert!(updated.contains("command = \"herdr-scratch-pane.custom-action\""));
+    assert!(updated.contains("description = \"Custom scratch action\""));
+    assert!(updated.contains("key = \"prefix+x\""));
 }
 
 #[test]
@@ -246,7 +270,7 @@ fn marker_target_uses_recorded_host_then_workspace_fallback() {
         focused: true,
     };
     assert_eq!(
-        choose_marker_target(Some(&state), &[scratch.clone(), host.clone()], &scratch),
+        legacy_marker_cleanup_target(Some(&state), &[scratch.clone(), host.clone()], &scratch),
         Some("host".into())
     );
 
@@ -258,7 +282,7 @@ fn marker_target_uses_recorded_host_then_workspace_fallback() {
         focused: false,
     };
     assert_eq!(
-        choose_marker_target(Some(&state), &[scratch], &fallback),
+        legacy_marker_cleanup_target(Some(&state), &[scratch], &fallback),
         Some("fallback".into())
     );
 }

@@ -1,4 +1,10 @@
+use std::ffi::OsString;
+use std::process::Command;
+
+use anyhow::{anyhow, bail, Context, Result};
 use serde::Deserialize;
+
+use crate::commands::{pane_current_args, pane_list_args, workspace_get_args};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct PaneInfo {
@@ -70,4 +76,51 @@ pub fn parse_opened_pane_id(input: &str) -> Option<String> {
         .or_else(|| value.pointer("/result/pane/pane_id"))
         .and_then(|pane_id| pane_id.as_str())
         .map(ToOwned::to_owned)
+}
+
+pub struct Herdr {
+    bin: OsString,
+}
+
+impl Herdr {
+    pub fn from_env() -> Self {
+        Self {
+            bin: std::env::var_os("HERDR_BIN_PATH").unwrap_or_else(|| OsString::from("herdr")),
+        }
+    }
+
+    pub fn run(&self, args: Vec<String>) -> Result<String> {
+        let output = Command::new(&self.bin)
+            .args(&args)
+            .output()
+            .with_context(|| format!("failed to run Herdr command: {}", args.join(" ")))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            bail!(
+                "Herdr command failed: {}\nstdout: {}\nstderr: {}",
+                args.join(" "),
+                stdout.trim(),
+                stderr.trim()
+            );
+        }
+
+        String::from_utf8(output.stdout).map_err(|error| anyhow!(error))
+    }
+
+    pub fn current_pane(&self) -> Result<PaneInfo> {
+        let stdout = self.run(pane_current_args())?;
+        parse_current_pane(&stdout).context("failed to parse `herdr pane current` output")
+    }
+
+    pub fn pane_list(&self) -> Result<Vec<PaneInfo>> {
+        let stdout = self.run(pane_list_args())?;
+        parse_pane_list(&stdout).context("failed to parse `herdr pane list` output")
+    }
+
+    pub fn workspace_info(&self, workspace_id: &str) -> Result<WorkspaceInfo> {
+        let stdout = self.run(workspace_get_args(workspace_id))?;
+        parse_workspace_get(&stdout).context("failed to parse `herdr workspace get` output")
+    }
 }
