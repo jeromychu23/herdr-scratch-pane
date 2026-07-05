@@ -13,7 +13,6 @@ editors, and REPLs working like they do in a regular Herdr pane.
 - Hide the visible scratch pane without killing its process.
 - Keep hidden scratch sessions running in the background through `dtach`.
 - Mark workspaces with a hidden scratch session using ` [scratch-on]`.
-- Protect split keybindings while a scratch pane is active.
 
 This is not a transparent draggable floating box. It uses Herdr's native pane
 and zoom behavior for better terminal, mouse, resize, and TUI compatibility.
@@ -54,17 +53,14 @@ herdr plugin link /path/to/herdr-scratch-pane
 
 ## Usage
 
-The installer writes the recommended keybindings for you. If you want to
-configure them manually, add these commands to `~/.config/herdr/config.toml`.
+The installer writes keybindings for you. If you want to configure the core
+scratch pane keys manually, add these commands to `~/.config/herdr/config.toml`.
 
 If your config already has a `[keys]` table, do not paste another `[keys]`
 header; add these entries inside the existing keys section.
 
 ```toml
 [keys]
-split_vertical = ""
-split_horizontal = ""
-
 [[keys.command]]
 key = "prefix+f"
 type = "plugin_action"
@@ -82,18 +78,6 @@ key = "prefix+cmd+z"
 type = "plugin_action"
 command = "herdr-scratch-pane.minimize-current"
 description = "Minimize current scratch pane"
-
-[[keys.command]]
-key = "prefix+v"
-type = "plugin_action"
-command = "herdr-scratch-pane.safe-split-right"
-description = "Split right unless scratch pane is active"
-
-[[keys.command]]
-key = "prefix+minus"
-type = "plugin_action"
-command = "herdr-scratch-pane.safe-split-down"
-description = "Split down unless scratch pane is active"
 ```
 
 ## Limitations
@@ -103,6 +87,8 @@ description = "Split down unless scratch pane is active"
 - `prefix+cmd+z` depends on your terminal forwarding Command/Super key chords
   to Herdr. If it does not work, bind `herdr-scratch-pane.minimize-current` to
   another key.
+- When a scratch pane is open, Herdr's native split keybindings may leave the
+  scratch pane and split the underlying layout.
 
 ## Trust And Security
 
