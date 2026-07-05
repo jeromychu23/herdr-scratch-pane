@@ -27,27 +27,34 @@ and zoom behavior for better terminal, mouse, resize, and TUI compatibility.
 Install `dtach`:
 
 ```sh
+# Install dtach so the scratch shell can keep running after the pane is hidden.
 brew install dtach
 ```
 
 ## Installation
 
-After this repository is published on GitHub:
+Install from GitHub:
 
 ```sh
-herdr plugin install owner/repo
+# Install the plugin from this GitHub repository.
+herdr plugin install jeromychu23/herdr-scratch-pane
+
+# Add the recommended keybindings to your Herdr config.
 herdr plugin action invoke herdr-scratch-pane.install-keybindings
 ```
-
-Replace `owner/repo` with the GitHub repository path.
 
 Reload Herdr config or restart Herdr after installing keybindings.
 
 For local development:
 
 ```sh
+# Build the plugin binary.
 cargo build --release
+
+# Link this local checkout into Herdr.
 herdr plugin link /path/to/herdr-scratch-pane
+
+# Install keybindings from the local binary.
 ./target/release/herdr-scratch-pane install-keybindings
 ```
 
