@@ -1,2 +1,35 @@
+# Rust build output
 /target/
+
+# Local environment/config
+.env
+.env.*
+!.env.example
+.envrc
+.direnv/
+
+# Editor and OS files
 .DS_Store
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs, caches, and temp files
+*.log
+logs/
+.cache/
+tmp/
+temp/
+
+# Backups
+*.bak
+*.backup
+
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519

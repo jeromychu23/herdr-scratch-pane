@@ -1,23 +1,39 @@
 # herdr-scratch-pane
 
-A Rust Herdr plugin for native zoomed scratch panes.
+A Herdr plugin that provides a persistent scratch pane using Herdr's native pane
+and zoom behavior.
 
-`herdr-scratch-pane` gives Herdr a fast, persistent scratch shell that opens as
-a normal Herdr pane and immediately zooms to the full workspace. It is designed
-for full-screen terminal apps such as `yazi`, `btop`, editors, REPLs, and long
-running shell jobs.
+It is built for the workflow where you want to quickly open a temporary shell,
+run tools, hide it, and bring it back later without killing the process.
 
-## What It Is
+## Why This Exists
 
-This plugin uses Herdr's own pane renderer. When you open the scratch pane,
-Herdr creates a regular plugin pane, focuses it, and the plugin zooms that pane
-with Herdr's native pane API. Because Herdr still owns rendering, selection,
-mouse input, resize mode, terminal responses, and TUI layout, applications
-inside the scratch pane behave like they do in a normal Herdr pane.
+The original idea was a tmux-floax-style floating pane for Herdr. In practice,
+an app-rendered floating terminal is fragile: mouse input, text selection,
+terminal resize, and full-screen TUI apps such as `yazi` and `btop` can easily
+break.
 
-This plugin intentionally does not draw a transparent floating terminal UI. It
-does not use `ratatui`, `vt100`, embedded PTYs, terminal mouse capture, or an
-app-managed renderer.
+This plugin takes a more stable approach:
+
+- open a normal Herdr plugin pane
+- zoom it with Herdr's native pane API
+- keep the shell alive in `dtach` when the pane is hidden
+
+The result is not a transparent draggable overlay. It is a native zoomed
+scratch pane that keeps Herdr responsible for terminal rendering, resize mode,
+mouse behavior, and TUI compatibility.
+
+## What It Does
+
+- `prefix+f` toggles a workspace scratch pane.
+- `prefix+shift+f` toggles a session scratch pane.
+- `prefix+cmd+z` hides the visible scratch pane while keeping its process alive.
+- Hidden scratch sessions continue running in the background through `dtach`.
+- Workspaces with a hidden scratch session show a ` [scratch-on]` label marker.
+- Split keybindings can be proxied so split actions do not accidentally split
+  the underlying layout while a scratch pane is active.
+
+Only one scratch host pane is visible at a time.
 
 ## Requirements
 
@@ -26,34 +42,26 @@ app-managed renderer.
 - Rust toolchain with `cargo`
 - `dtach`
 
-Install `dtach` on macOS:
+Install `dtach`:
 
 ```sh
 brew install dtach
 ```
 
-Herdr builds plugins with the commands declared in `herdr-plugin.toml`. This
-plugin uses `cargo build --release`, so `cargo` must be available when the
-plugin is installed from GitHub.
+## Installation
 
-## Install From GitHub
-
-After publishing this repository, install it with Herdr's GitHub plugin install
-syntax:
+After this repository is published on GitHub:
 
 ```sh
 herdr plugin install owner/repo
-herdr plugin action list --plugin herdr-scratch-pane
 herdr plugin action invoke herdr-scratch-pane.install-keybindings
 ```
 
-Replace `owner/repo` with the published GitHub repository. To appear in Herdr's
-community plugin index, the public GitHub repository should use the
-`herdr-plugin` topic.
+Replace `owner/repo` with the GitHub repository path.
+
+Reload Herdr config or restart Herdr after installing keybindings.
 
 ## Local Development
-
-For local testing, build the binary yourself and link the working tree:
 
 ```sh
 cargo build --release
@@ -61,175 +69,45 @@ herdr plugin link /path/to/herdr-scratch-pane
 ./target/release/herdr-scratch-pane install-keybindings
 ```
 
-Reload Herdr config or restart Herdr after installing keybindings.
+`herdr plugin link` does not run the build command, so rebuild manually after
+changing Rust code.
 
-`herdr plugin link` registers the local directory but does not run the build
-command. Rebuild manually after changing Rust code.
+## Usage
 
-## Keybindings
+| Keybinding | Action |
+| --- | --- |
+| `prefix+f` | Toggle workspace scratch pane |
+| `prefix+shift+f` | Toggle session scratch pane |
+| `prefix+cmd+z` | Hide the visible scratch pane |
+| existing split keys | Split normally outside scratch panes; block split while scratch is active |
 
-The default keybindings installed by `install-keybindings` are:
+## Design Notes
 
-- `prefix+f`: toggle workspace scratch pane
-- `prefix+shift+f`: toggle session scratch pane
-- `prefix+cmd+z`: minimize the currently visible scratch pane
-- existing Herdr split keys: proxied through `herdr-scratch-pane.safe-split-*`
+This plugin intentionally avoids custom terminal rendering. It does not use
+`ratatui`, `vt100`, embedded PTYs, or terminal mouse capture.
 
-Only one scratch host pane is visible at a time. Workspace and session scratch
-panes use separate `dtach` sessions, so they do not share cwd or running
-processes.
-
-## How It Works
-
-Opening a scratch pane asks Herdr to open a normal plugin pane with split
-placement, then immediately runs `herdr pane zoom --on` for that pane. The pane
-command starts `dtach`, attached to a scope-specific socket.
-
-Minimizing closes only the Herdr host pane. The shell and any running processes
-remain alive inside `dtach`. Toggling again opens a fresh host pane and
-reattaches to the same `dtach` session.
-
-While the scratch session is hidden, the plugin marks the workspace label with
-` [scratch-on]`. Revealing the scratch pane restores the original workspace
-label. If the workspace is renamed by hand while scratch is hidden, the plugin
-does not overwrite the user's new label.
-
-The keybinding installer rewires Herdr's split keys through plugin actions.
-Outside scratch panes, those actions delegate to `herdr pane split --current`.
-When a scratch pane is visible, they show a notification instead of letting
-Herdr unzoom and split the underlying layout target.
-
-## Keybinding Installer
-
-Run:
-
-```sh
-herdr plugin action invoke herdr-scratch-pane.install-keybindings
-```
-
-When developing locally, the equivalent direct binary command is:
-
-```sh
-./target/release/herdr-scratch-pane install-keybindings
-```
-
-The installer edits `~/.config/herdr/config.toml` by default. It creates a
-timestamped backup next to the config before changing an existing file.
-
-The installer is idempotent. Re-running it preserves keys that were previously
-assigned to its managed commands. It only manages these commands:
-
-- `herdr-scratch-pane.toggle-workspace`
-- `herdr-scratch-pane.toggle-session`
-- `herdr-scratch-pane.minimize-current`
-- `herdr-scratch-pane.safe-split-right`
-- `herdr-scratch-pane.safe-split-down`
-
-Other custom plugin actions are preserved, even if their command name starts
-with `herdr-scratch-pane.`.
-
-Use `--no-split-proxy` if you do not want the installer to rewrite native split
-keys through the scratch split guard.
-
-Manual configuration can be used instead. If your config already has a `[keys]`
-table, do not paste another `[keys]` header; add the fields and command tables
-inside the existing keys section.
-
-```toml
-# herdr-scratch-pane:keybindings
-[keys]
-split_vertical = ""
-split_horizontal = ""
-
-[[keys.command]]
-key = "prefix+f"
-type = "plugin_action"
-command = "herdr-scratch-pane.toggle-workspace"
-description = "Toggle workspace scratch pane"
-
-[[keys.command]]
-key = "prefix+shift+f"
-type = "plugin_action"
-command = "herdr-scratch-pane.toggle-session"
-description = "Toggle session scratch pane"
-
-[[keys.command]]
-key = "prefix+cmd+z"
-type = "plugin_action"
-command = "herdr-scratch-pane.minimize-current"
-description = "Minimize current scratch pane"
-
-[[keys.command]]
-key = "prefix+v"
-type = "plugin_action"
-command = "herdr-scratch-pane.safe-split-right"
-description = "Split right unless scratch pane is active"
-
-[[keys.command]]
-key = "prefix+minus"
-type = "plugin_action"
-command = "herdr-scratch-pane.safe-split-down"
-description = "Split down unless scratch pane is active"
-```
-
-## Trust And Security
-
-Herdr plugins are ordinary executables that run as your user. Herdr validates
-the manifest and keeps plugin config/state in plugin-specific directories, but
-it does not sandbox third-party plugin code. Review `herdr-plugin.toml` and the
-Rust source before installing. See Herdr's plugin trust model:
-https://herdr.dev/docs/plugins/#trust-and-security
-
-This plugin does not make network requests at runtime.
-
-It performs these local actions:
-
-- runs the `herdr` CLI through `HERDR_BIN_PATH` when available
-- opens, zooms, closes, lists, and inspects Herdr panes
-- calls `herdr workspace get` and `herdr workspace rename` for the
-  ` [scratch-on]` workspace marker
-- starts `dtach` plus your login shell inside a Herdr pane
-- writes state and `dtach` sockets under Herdr's plugin state directory
-- edits `~/.config/herdr/config.toml` only when you explicitly run
-  `install-keybindings`
-
-The plugin root is treated as source code. Durable runtime state belongs in
-Herdr's plugin state directory, not in the repository checkout.
+The scratch process is persisted with `dtach`. When a scratch pane is hidden,
+Herdr closes the host pane, but the shell session keeps running. Toggling the
+scratch pane again opens a fresh Herdr pane and reattaches to the same session.
 
 ## Limitations
 
-- This is a native zoomed scratch pane, not a transparent draggable overlay.
-- It does not provide a mouse `[-]` button or app-drawn floating-box resize.
-- `prefix+cmd+z` depends on your terminal forwarding Command/Super chords to
-  Herdr. If it does not, bind `herdr-scratch-pane.minimize-current` to another
-  key.
-- Unix-like systems are required because the pane command uses `exec` and
-  `dtach`.
+- This is not a transparent draggable floating box.
+- It does not provide mouse resize handles or a mouse minimize button.
+- `prefix+cmd+z` depends on your terminal forwarding Command/Super key chords
+  to Herdr. If it does not work, bind `herdr-scratch-pane.minimize-current` to
+  another key.
+- The current implementation targets macOS and Unix-like behavior because it
+  uses `dtach` and process `exec`.
 
-## Troubleshooting
+## Trust And Security
 
-If `dtach` is missing, install it and rebuild/reopen the plugin:
+Herdr plugins are ordinary executables that run as your user. Review
+`herdr-plugin.toml` and the source before installing third-party plugins.
 
-```sh
-brew install dtach
-```
-
-If `prefix+cmd+z` does not minimize, your terminal probably does not forward
-that chord. Rebind `herdr-scratch-pane.minimize-current` to a key Herdr
-receives.
-
-If the workspace label keeps ` [scratch-on]`, reveal the scratch pane once with
-`prefix+f`. The plugin restores labels only when it can confirm it wrote that
-marker. If you renamed the workspace manually while scratch was hidden, your
-manual label is preserved.
-
-If split keys show "Scratch pane split is disabled", a scratch pane is visible
-or the plugin state says a scratch host pane is still visible. Toggle or
-minimize the scratch pane before splitting the main layout.
-
-If `yazi`, `btop`, or another TUI behaves oddly, verify that the pane is opened
-by this native zoomed implementation and not an older floating renderer build.
-This implementation should not intercept mouse input or terminal responses.
+This plugin does not make network requests at runtime. It calls the Herdr CLI,
+starts `dtach` plus your shell, writes plugin state for the `dtach` socket, and
+edits Herdr keybindings only when you explicitly run `install-keybindings`.
 
 ## Development
 
@@ -240,13 +118,13 @@ cargo clippy --all-targets -- -D warnings
 cargo build --release
 ```
 
-The test suite covers Herdr JSON parsing, command argument construction,
-toggle/minimize/safe-split decisions, workspace marker restoration, keybinding
-installation, and `dtach` command construction.
-
 ## Attribution
 
-This plugin was originally explored from a tmux-floax-style idea and compared
+This project was inspired by the tmux-floax scratch pane workflow and compared
 against [Tyru5/herdr-floax](https://github.com/Tyru5/herdr-floax). The current
-implementation uses Herdr native pane rendering rather than an app-drawn
-floating box.
+implementation uses Herdr native panes rather than an app-rendered floating
+terminal.
+
+## License
+
+MIT
