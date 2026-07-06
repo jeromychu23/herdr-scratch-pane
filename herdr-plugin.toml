@@ -6,7 +6,7 @@
 
 id = "herdr-scratch-pane"
 name = "herdr-scratch-pane"
-version = "0.1.0"
+version = "0.1.1"
 description = "Native zoomed scratch panes for Herdr."
 min_herdr_version = "0.7.1"
 platforms = ["macos"]

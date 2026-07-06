@@ -1,6 +1,6 @@
 [package]
 name = "herdr-scratch-pane"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A native zoomed scratch pane plugin for Herdr"
 license = "MIT"
