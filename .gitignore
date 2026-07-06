@@ -22,6 +22,9 @@ logs/
 tmp/
 temp/
 
+# Local demo media
+/video-demo/
+
 # Backups
 *.bak
 *.backup
