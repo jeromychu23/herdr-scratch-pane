@@ -60,6 +60,53 @@ herdr plugin link /path/to/herdr-scratch-pane
 ./target/release/herdr-scratch-pane install-keybindings
 ```
 
+## Updating
+
+Herdr does not have a separate `plugin update` command yet. Reinstall the
+GitHub plugin to update the Herdr-managed checkout:
+
+```sh
+# Update to the latest version from GitHub.
+herdr plugin install jeromychu23/herdr-scratch-pane
+
+# Refresh the generated keybindings after updating.
+herdr plugin action invoke herdr-scratch-pane.install-keybindings
+
+# Reload Herdr config.
+herdr server reload-config
+```
+
+If you use named Herdr sessions, reload each running session that should receive
+the updated keybindings:
+
+```sh
+# Reload config for a named Herdr session.
+herdr --session <name> server reload-config
+```
+
+For local development:
+
+```sh
+# Pull the latest source.
+git pull
+
+# Rebuild the local plugin binary.
+cargo build --release
+
+# Refresh keybindings so they point at the rebuilt binary.
+./target/release/herdr-scratch-pane install-keybindings
+
+# Reload Herdr config.
+herdr server reload-config
+```
+
+To pin a specific release or commit, pass `--ref`:
+
+```sh
+# Install a specific release tag.
+herdr plugin install jeromychu23/herdr-scratch-pane --ref v0.1.1
+```
+
 ## Usage
 
 The installer writes keybindings for you. If you want to configure the core
