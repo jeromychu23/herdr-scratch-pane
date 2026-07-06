@@ -1,4 +1,4 @@
-use crate::scope::Scope;
+use crate::scope::{scratch_label, Scope};
 
 pub const PLUGIN_ID: &str = "herdr-scratch-pane";
 
@@ -10,24 +10,21 @@ pub struct OpenPaneRequest {
 }
 
 pub fn open_pane_args(request: OpenPaneRequest) -> Vec<String> {
-    let mut args = vec![
-        "plugin".into(),
-        "pane".into(),
-        "open".into(),
-        "--plugin".into(),
-        PLUGIN_ID.into(),
-        "--entrypoint".into(),
-        entrypoint(request.scope).into(),
-        "--placement".into(),
-        "split".into(),
-        "--direction".into(),
-        "right".into(),
-        "--focus".into(),
-    ];
+    let mut args = vec!["pane".into(), "split".into()];
 
     if let Some(target) = request.target_pane_id {
-        args.push("--target-pane".into());
+        args.push("--pane".into());
         args.push(target);
+    } else {
+        args.push("--current".into());
+    }
+
+    args.push("--direction".into());
+    args.push("right".into());
+
+    if let Some(cwd) = request.cwd.as_deref() {
+        args.push("--cwd".into());
+        args.push(cwd.into());
     }
 
     args.push("--env".into());
@@ -41,16 +38,44 @@ pub fn open_pane_args(request: OpenPaneRequest) -> Vec<String> {
         args.push(format!("HERDR_SCRATCH_PANE_CWD={cwd}"));
     }
 
+    args.push("--focus".into());
     args
 }
 
-pub fn close_pane_args(pane_id: &str) -> Vec<String> {
+pub fn pane_run_command(binary_path: &str, scope: Scope) -> String {
+    format!(
+        "exec {} run-pane --scope {}",
+        shell_quote(binary_path),
+        scope.as_str()
+    )
+}
+
+pub fn run_pane_args(pane_id: &str, command: &str) -> Vec<String> {
+    vec!["pane".into(), "run".into(), pane_id.into(), command.into()]
+}
+
+pub fn rename_scratch_pane_args(pane_id: &str, scope: Scope) -> Vec<String> {
     vec![
-        "plugin".into(),
         "pane".into(),
-        "close".into(),
+        "rename".into(),
         pane_id.into(),
+        scratch_label(scope).into(),
     ]
+}
+
+fn shell_quote(value: &str) -> String {
+    if value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '/' | '.' | '_' | '-'))
+    {
+        return value.to_string();
+    }
+
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+pub fn close_pane_args(pane_id: &str) -> Vec<String> {
+    vec!["pane".into(), "close".into(), pane_id.into()]
 }
 
 pub fn zoom_pane_args(pane_id: &str) -> Vec<String> {
@@ -97,11 +122,4 @@ pub fn clear_legacy_marker_args(pane_id: &str) -> Vec<String> {
         "--clear-title".into(),
         "--clear-custom-status".into(),
     ]
-}
-
-fn entrypoint(scope: Scope) -> &'static str {
-    match scope {
-        Scope::Workspace => "workspace-scratch",
-        Scope::Session => "session-scratch",
-    }
 }

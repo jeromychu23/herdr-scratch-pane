@@ -29,6 +29,13 @@ pub fn session_name(scope: Scope, workspace_id: Option<&str>, server_id: Option<
     }
 }
 
+pub fn session_identity(server_id: Option<&str>, socket_path: Option<&str>) -> Option<String> {
+    server_id
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| socket_path.filter(|value| !value.trim().is_empty()))
+        .map(ToOwned::to_owned)
+}
+
 fn sanitize(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let mut last_dash = false;

@@ -1,5 +1,6 @@
 use herdr_scratch_pane::commands::{
-    open_pane_args, workspace_get_args, workspace_rename_args, OpenPaneRequest,
+    open_pane_args, pane_run_command, run_pane_args, workspace_get_args, workspace_rename_args,
+    OpenPaneRequest,
 };
 use herdr_scratch_pane::decisions::{minimize_decision, open_target_for_current, MinimizeDecision};
 use herdr_scratch_pane::herdr::{parse_opened_pane_id, PaneInfo};
@@ -21,55 +22,164 @@ fn open_pane_args_use_native_split_zoom_host_and_pass_scope_cwd_env() {
     assert_eq!(
         args,
         vec![
-            "plugin",
             "pane",
-            "open",
-            "--plugin",
-            "herdr-scratch-pane",
-            "--entrypoint",
-            "workspace-scratch",
-            "--placement",
             "split",
+            "--pane",
+            "p1",
             "--direction",
             "right",
-            "--focus",
-            "--target-pane",
-            "p1",
+            "--cwd",
+            "/tmp/proj",
             "--env",
             "HERDR_SCRATCH_PANE_SCOPE=workspace",
             "--env",
             "HERDR_SCRATCH_PANE_CWD=/tmp/proj",
+            "--focus",
         ]
     );
 }
 
 #[test]
-fn session_open_pane_args_select_session_entrypoint_without_target_when_absent() {
+fn pane_run_command_execs_current_binary_with_scope() {
+    assert_eq!(
+        pane_run_command(
+            "/Applications/Test App/herdr-scratch-pane",
+            Scope::Workspace
+        ),
+        "exec '/Applications/Test App/herdr-scratch-pane' run-pane --scope workspace"
+    );
+    assert_eq!(
+        run_pane_args(
+            "p1",
+            &pane_run_command("/tmp/herdr-scratch-pane", Scope::Session)
+        ),
+        vec![
+            "pane",
+            "run",
+            "p1",
+            "exec /tmp/herdr-scratch-pane run-pane --scope session"
+        ]
+    );
+}
+
+#[test]
+fn pane_run_command_quotes_single_quotes_in_binary_path() {
+    assert_eq!(
+        pane_run_command("/tmp/it's/herdr-scratch-pane", Scope::Workspace),
+        "exec '/tmp/it'\\''s/herdr-scratch-pane' run-pane --scope workspace"
+    );
+}
+
+#[test]
+fn open_pane_args_omit_target_when_absent() {
     let args = open_pane_args(OpenPaneRequest {
         scope: Scope::Session,
         target_pane_id: None,
         cwd: None,
     });
 
-    assert!(args.contains(&"session-scratch".to_string()));
-    assert!(!args.contains(&"--target-pane".to_string()));
-    assert!(args.contains(&"HERDR_SCRATCH_PANE_SCOPE=session".to_string()));
+    assert_eq!(
+        args,
+        vec![
+            "pane",
+            "split",
+            "--current",
+            "--direction",
+            "right",
+            "--env",
+            "HERDR_SCRATCH_PANE_SCOPE=session",
+            "--focus",
+        ]
+    );
 }
 
 #[test]
-fn keybinding_install_appends_once_and_preserves_existing_text() {
+fn open_pane_args_target_existing_pane_when_present() {
+    let args = open_pane_args(OpenPaneRequest {
+        scope: Scope::Workspace,
+        target_pane_id: Some("p1".into()),
+        cwd: None,
+    });
+
+    assert!(args.contains(&"p1".to_string()));
+    assert!(args.contains(&"--pane".to_string()));
+    assert!(!args.contains(&"--current".to_string()));
+}
+
+#[test]
+fn keybinding_install_writes_shell_commands_for_named_sessions() {
     let initial = "[keys]\nprefix = \"ctrl+b\"\nsplit_vertical = \"prefix+|\"\n";
-    let first =
-        install_keybindings_text(initial, "prefix+f", "prefix+shift+f", "prefix+cmd+z").unwrap();
+    let first = install_keybindings_text(
+        initial,
+        "prefix+f",
+        "prefix+shift+f",
+        "prefix+cmd+z",
+        "/Applications/Test App/herdr-scratch-pane",
+    )
+    .unwrap();
+
     assert!(first.contains(DEFAULT_KEYBINDINGS_MARKER));
-    assert!(first.contains("command = \"herdr-scratch-pane.toggle-workspace\""));
-    assert!(first.contains("command = \"herdr-scratch-pane.toggle-session\""));
-    assert!(first.contains("command = \"herdr-scratch-pane.minimize-current\""));
+    assert!(first.contains("type = \"shell\""));
+    assert!(first.contains(
+        "command = \"'/Applications/Test App/herdr-scratch-pane' toggle --scope workspace\""
+    ));
+    assert!(first.contains(
+        "command = \"'/Applications/Test App/herdr-scratch-pane' toggle --scope session\""
+    ));
+    assert!(first.contains("command = \"'/Applications/Test App/herdr-scratch-pane' minimize\""));
     assert!(first.contains("split_vertical = \"prefix+|\""));
 
-    let second =
-        install_keybindings_text(&first, "prefix+g", "prefix+shift+g", "prefix+alt+z").unwrap();
+    let second = install_keybindings_text(
+        &first,
+        "prefix+g",
+        "prefix+shift+g",
+        "prefix+alt+z",
+        "/Applications/Test App/herdr-scratch-pane",
+    )
+    .unwrap();
     assert_eq!(first, second);
+}
+
+#[test]
+fn keybinding_install_migrates_legacy_plugin_actions_and_restores_split_keys() {
+    let initial = r#"[keys]
+split_vertical = ""
+split_horizontal = ""
+
+[[keys.command]]
+key = "prefix+|"
+type = "plugin_action"
+command = "herdr-scratch-pane.safe-split-right"
+description = "Split right unless scratch pane is active"
+
+[[keys.command]]
+key = "prefix+minus"
+type = "plugin_action"
+command = "herdr-scratch-pane.safe-split-down"
+description = "Split down unless scratch pane is active"
+
+[[keys.command]]
+key = "prefix+f"
+type = "plugin_action"
+command = "herdr-scratch-pane.toggle-workspace"
+description = "Toggle workspace scratch pane"
+"#;
+
+    let updated = install_keybindings_text(
+        initial,
+        "prefix+f",
+        "prefix+shift+f",
+        "prefix+cmd+z",
+        "/tmp/herdr-scratch-pane",
+    )
+    .unwrap();
+
+    assert!(updated.contains("split_vertical = \"prefix+v\""));
+    assert!(updated.contains("split_horizontal = \"prefix+minus\""));
+    assert!(!updated.contains("safe-split"));
+    assert!(!updated.contains("type = \"plugin_action\"\ncommand = \"herdr-scratch-pane"));
+    assert!(updated.contains("key = \"prefix+f\""));
+    assert!(updated.contains("command = \"/tmp/herdr-scratch-pane toggle --scope workspace\""));
 }
 
 #[test]
@@ -83,8 +193,14 @@ command = "herdr-scratch-pane.custom-action"
 description = "Custom scratch action"
 "#;
 
-    let updated =
-        install_keybindings_text(initial, "prefix+f", "prefix+shift+f", "prefix+cmd+z").unwrap();
+    let updated = install_keybindings_text(
+        initial,
+        "prefix+f",
+        "prefix+shift+f",
+        "prefix+cmd+z",
+        "/tmp/herdr-scratch-pane",
+    )
+    .unwrap();
 
     assert!(updated.contains("command = \"herdr-scratch-pane.custom-action\""));
     assert!(updated.contains("description = \"Custom scratch action\""));

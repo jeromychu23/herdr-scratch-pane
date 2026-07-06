@@ -2,7 +2,7 @@ use herdr_scratch_pane::decisions::{decide_toggle, ToggleDecision, ToggleInputs}
 use herdr_scratch_pane::herdr::{
     parse_current_pane, parse_pane_list, parse_workspace_get, PaneInfo,
 };
-use herdr_scratch_pane::scope::{scratch_label, session_name, Scope};
+use herdr_scratch_pane::scope::{scratch_label, session_identity, session_name, Scope};
 
 #[test]
 fn herdr_json_parsing_accepts_current_and_list_shapes() {
@@ -48,6 +48,23 @@ fn scope_names_are_stable_and_filename_safe() {
         session_name(Scope::Session, Some("ws/a:b"), Some("srv 1")),
         "session-srv-1"
     );
+}
+
+#[test]
+fn session_identity_prefers_server_id_then_socket_path() {
+    assert_eq!(
+        session_identity(Some("server 1"), Some("/tmp/herdr.sock")).as_deref(),
+        Some("server 1")
+    );
+    assert_eq!(
+        session_identity(
+            None,
+            Some("/Users/me/.config/herdr/sessions/record/herdr.sock")
+        )
+        .as_deref(),
+        Some("/Users/me/.config/herdr/sessions/record/herdr.sock")
+    );
+    assert_eq!(session_identity(None, None), None);
 }
 
 #[test]
