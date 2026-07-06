@@ -1,11 +1,7 @@
 use herdr_scratch_pane::commands::{
-    open_pane_args, split_pane_args, workspace_get_args, workspace_rename_args, OpenPaneRequest,
-    SplitDirection,
+    open_pane_args, workspace_get_args, workspace_rename_args, OpenPaneRequest,
 };
-use herdr_scratch_pane::decisions::{
-    minimize_decision, open_target_for_current, safe_split_decision, MinimizeDecision,
-    SafeSplitDecision,
-};
+use herdr_scratch_pane::decisions::{minimize_decision, open_target_for_current, MinimizeDecision};
 use herdr_scratch_pane::herdr::{parse_opened_pane_id, PaneInfo};
 use herdr_scratch_pane::keybindings::{install_keybindings_text, DEFAULT_KEYBINDINGS_MARKER};
 use herdr_scratch_pane::scope::Scope;
@@ -64,36 +60,16 @@ fn session_open_pane_args_select_session_entrypoint_without_target_when_absent()
 fn keybinding_install_appends_once_and_preserves_existing_text() {
     let initial = "[keys]\nprefix = \"ctrl+b\"\nsplit_vertical = \"prefix+|\"\n";
     let first =
-        install_keybindings_text(initial, "prefix+f", "prefix+shift+f", "prefix+cmd+z", true)
-            .unwrap();
+        install_keybindings_text(initial, "prefix+f", "prefix+shift+f", "prefix+cmd+z").unwrap();
     assert!(first.contains(DEFAULT_KEYBINDINGS_MARKER));
     assert!(first.contains("command = \"herdr-scratch-pane.toggle-workspace\""));
     assert!(first.contains("command = \"herdr-scratch-pane.toggle-session\""));
     assert!(first.contains("command = \"herdr-scratch-pane.minimize-current\""));
-    assert!(first.contains("command = \"herdr-scratch-pane.safe-split-right\""));
-    assert!(first.contains("command = \"herdr-scratch-pane.safe-split-down\""));
-    assert!(first.contains("split_vertical = \"\""));
-    assert!(first.contains("split_horizontal = \"\""));
-    assert!(first.contains("key = \"prefix+|\""));
-    assert!(first.contains("key = \"prefix+minus\""));
+    assert!(first.contains("split_vertical = \"prefix+|\""));
 
     let second =
-        install_keybindings_text(&first, "prefix+g", "prefix+shift+g", "prefix+alt+z", true)
-            .unwrap();
+        install_keybindings_text(&first, "prefix+g", "prefix+shift+g", "prefix+alt+z").unwrap();
     assert_eq!(first, second);
-}
-
-#[test]
-fn keybinding_install_can_skip_split_proxy() {
-    let initial = "[keys]\nsplit_vertical = \"prefix+v\"\nsplit_horizontal = \"prefix+-\"\n";
-    let updated =
-        install_keybindings_text(initial, "prefix+f", "prefix+shift+f", "prefix+cmd+z", false)
-            .unwrap();
-
-    assert!(updated.contains("split_vertical = \"prefix+v\""));
-    assert!(updated.contains("split_horizontal = \"prefix+-\""));
-    assert!(!updated.contains("herdr-scratch-pane.safe-split-right"));
-    assert!(!updated.contains("herdr-scratch-pane.safe-split-down"));
 }
 
 #[test]
@@ -108,89 +84,11 @@ description = "Custom scratch action"
 "#;
 
     let updated =
-        install_keybindings_text(initial, "prefix+f", "prefix+shift+f", "prefix+cmd+z", true)
-            .unwrap();
+        install_keybindings_text(initial, "prefix+f", "prefix+shift+f", "prefix+cmd+z").unwrap();
 
     assert!(updated.contains("command = \"herdr-scratch-pane.custom-action\""));
     assert!(updated.contains("description = \"Custom scratch action\""));
     assert!(updated.contains("key = \"prefix+x\""));
-}
-
-#[test]
-fn safe_split_blocks_scratch_and_delegates_normal_panes() {
-    let scratch = PaneInfo {
-        pane_id: "fw".into(),
-        workspace_id: Some("w1".into()),
-        cwd: None,
-        label: Some("⌂ scratch workspace".into()),
-        focused: true,
-    };
-    assert_eq!(
-        safe_split_decision(&scratch, &[], None, SplitDirection::Right),
-        SafeSplitDecision::NotifyBlocked
-    );
-
-    let normal = PaneInfo {
-        pane_id: "p1".into(),
-        workspace_id: Some("w1".into()),
-        cwd: None,
-        label: Some("main".into()),
-        focused: true,
-    };
-    assert_eq!(
-        safe_split_decision(
-            &normal,
-            std::slice::from_ref(&scratch),
-            None,
-            SplitDirection::Right
-        ),
-        SafeSplitDecision::NotifyBlocked
-    );
-    let unlabeled_scratch = PaneInfo {
-        pane_id: "scratch-from-state".into(),
-        workspace_id: Some("w1".into()),
-        cwd: None,
-        label: None,
-        focused: false,
-    };
-    assert_eq!(
-        safe_split_decision(
-            &normal,
-            std::slice::from_ref(&unlabeled_scratch),
-            Some("scratch-from-state"),
-            SplitDirection::Right,
-        ),
-        SafeSplitDecision::NotifyBlocked
-    );
-    assert_eq!(
-        safe_split_decision(&normal, &[], None, SplitDirection::Down),
-        SafeSplitDecision::Split {
-            direction: SplitDirection::Down
-        }
-    );
-
-    assert_eq!(
-        split_pane_args(SplitDirection::Right),
-        vec![
-            "pane",
-            "split",
-            "--current",
-            "--direction",
-            "right",
-            "--focus"
-        ]
-    );
-    assert_eq!(
-        split_pane_args(SplitDirection::Down),
-        vec![
-            "pane",
-            "split",
-            "--current",
-            "--direction",
-            "down",
-            "--focus"
-        ]
-    );
 }
 
 #[test]

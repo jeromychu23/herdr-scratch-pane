@@ -45,18 +45,6 @@ description = "Minimize whichever herdr-scratch-pane host pane is visible."
 command = ["./target/release/herdr-scratch-pane", "minimize"]
 
 [[actions]]
-id = "safe-split-right"
-title = "Split right outside scratch panes"
-description = "Run Herdr split-right unless the active pane is a scratch pane."
-command = ["./target/release/herdr-scratch-pane", "safe-split", "--direction", "right"]
-
-[[actions]]
-id = "safe-split-down"
-title = "Split down outside scratch panes"
-description = "Run Herdr split-down unless the active pane is a scratch pane."
-command = ["./target/release/herdr-scratch-pane", "safe-split", "--direction", "down"]
-
-[[actions]]
 id = "install-keybindings"
 title = "Install scratch pane keybindings"
 description = "Update Herdr config with the recommended scratch pane keybindings."

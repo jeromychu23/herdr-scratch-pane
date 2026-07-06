@@ -6,15 +6,12 @@ pub const DEFAULT_KEYBINDINGS_MARKER: &str = "# herdr-scratch-pane:keybindings";
 const TOGGLE_WORKSPACE: &str = "herdr-scratch-pane.toggle-workspace";
 const TOGGLE_SESSION: &str = "herdr-scratch-pane.toggle-session";
 const MINIMIZE_CURRENT: &str = "herdr-scratch-pane.minimize-current";
-const SAFE_SPLIT_RIGHT: &str = "herdr-scratch-pane.safe-split-right";
-const SAFE_SPLIT_DOWN: &str = "herdr-scratch-pane.safe-split-down";
 
 pub fn install_keybindings_text(
     existing: &str,
     workspace_key: &str,
     session_key: &str,
     minimize_key: &str,
-    install_split_proxy: bool,
 ) -> Result<String> {
     let mut doc = existing.parse::<DocumentMut>()?;
     ensure_keys_table(&mut doc);
@@ -35,11 +32,6 @@ pub fn install_keybindings_text(
         .unwrap_or_else(|| vec![session_key.to_string()]);
     let minimize_keys = managed_command_keys(&existing_commands, MINIMIZE_CURRENT)
         .unwrap_or_else(|| vec![minimize_key.to_string()]);
-
-    let split_right_keys = managed_command_keys(&existing_commands, SAFE_SPLIT_RIGHT)
-        .unwrap_or_else(|| configured_keys(keys, "split_vertical", &["prefix+v"]));
-    let split_down_keys = managed_command_keys(&existing_commands, SAFE_SPLIT_DOWN)
-        .unwrap_or_else(|| configured_keys(keys, "split_horizontal", &["prefix+minus"]));
 
     let mut retained = ArrayOfTables::new();
     for table in existing_commands.iter() {
@@ -67,23 +59,6 @@ pub fn install_keybindings_text(
         "Minimize current scratch pane",
     );
 
-    if install_split_proxy {
-        keys["split_vertical"] = value("");
-        keys["split_horizontal"] = value("");
-        add_command_bindings(
-            &mut retained,
-            &split_right_keys,
-            SAFE_SPLIT_RIGHT,
-            "Split right unless scratch pane is active",
-        );
-        add_command_bindings(
-            &mut retained,
-            &split_down_keys,
-            SAFE_SPLIT_DOWN,
-            "Split down unless scratch pane is active",
-        );
-    }
-
     keys["command"] = Item::ArrayOfTables(retained);
 
     let mut output = doc.to_string();
@@ -100,13 +75,6 @@ pub fn install_keybindings_text(
 fn ensure_keys_table(doc: &mut DocumentMut) {
     if !doc.as_table().contains_key("keys") || !doc["keys"].is_table() {
         doc["keys"] = Item::Table(Table::new());
-    }
-}
-
-fn configured_keys(keys: &Table, field: &str, defaults: &[&str]) -> Vec<String> {
-    match keys.get(field) {
-        Some(item) => item_to_keys(item),
-        None => defaults.iter().map(|key| (*key).to_string()).collect(),
     }
 }
 
@@ -151,7 +119,7 @@ fn is_managed_command(table: &Table) -> bool {
 fn is_known_managed_command(command: &str) -> bool {
     matches!(
         command,
-        TOGGLE_WORKSPACE | TOGGLE_SESSION | MINIMIZE_CURRENT | SAFE_SPLIT_RIGHT | SAFE_SPLIT_DOWN
+        TOGGLE_WORKSPACE | TOGGLE_SESSION | MINIMIZE_CURRENT
     )
 }
 

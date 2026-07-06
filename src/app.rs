@@ -5,12 +5,12 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use crate::commands::{
-    clear_legacy_marker_args, close_pane_args, notification_args, open_pane_args, split_pane_args,
-    workspace_rename_args, zoom_pane_args, OpenPaneRequest, SplitDirection,
+    clear_legacy_marker_args, close_pane_args, notification_args, open_pane_args,
+    workspace_rename_args, zoom_pane_args, OpenPaneRequest,
 };
 use crate::decisions::{
-    decide_toggle, minimize_decision, open_target_for_current, safe_split_decision,
-    MinimizeDecision, SafeSplitDecision, ToggleDecision, ToggleInputs,
+    decide_toggle, minimize_decision, open_target_for_current, MinimizeDecision, ToggleDecision,
+    ToggleInputs,
 };
 use crate::herdr::{parse_opened_pane_id, Herdr, PaneInfo};
 use crate::keybindings::install_keybindings_text;
@@ -86,30 +86,11 @@ pub fn minimize() -> Result<()> {
     }
 }
 
-pub fn safe_split(direction: SplitDirection) -> Result<()> {
-    let herdr = Herdr::from_env();
-    let current = herdr.current_pane()?;
-    let panes = herdr.pane_list()?;
-    let visible_scratch_pane_id = visible_scratch_pane_id_from_state(&current, &panes)?;
-    match safe_split_decision(
-        &current,
-        &panes,
-        visible_scratch_pane_id.as_deref(),
-        direction,
-    ) {
-        SafeSplitDecision::Split { direction } => herdr.run(split_pane_args(direction)).map(|_| ()),
-        SafeSplitDecision::NotifyBlocked => herdr
-            .run(notification_args("Scratch pane split is disabled"))
-            .map(|_| ()),
-    }
-}
-
 pub fn install_keybindings(
     config_path: Option<PathBuf>,
     workspace_key: &str,
     session_key: &str,
     minimize_key: &str,
-    install_split_proxy: bool,
 ) -> Result<()> {
     let path = config_path.unwrap_or_else(default_config_path);
     if let Some(parent) = path.parent() {
@@ -117,13 +98,7 @@ pub fn install_keybindings(
             .with_context(|| format!("failed to create config dir {}", parent.display()))?;
     }
     let existing = read_config_or_empty(&path)?;
-    let updated = install_keybindings_text(
-        &existing,
-        workspace_key,
-        session_key,
-        minimize_key,
-        install_split_proxy,
-    )?;
+    let updated = install_keybindings_text(&existing, workspace_key, session_key, minimize_key)?;
     if updated != existing {
         backup_config(&path, &existing)?;
         fs::write(&path, updated).with_context(|| format!("failed to write {}", path.display()))?;
@@ -278,34 +253,6 @@ fn state_file(scope: Scope, workspace_id: Option<&str>) -> PathBuf {
     let state_dir = default_state_dir();
     let server_id = std::env::var("HERDR_SERVER_ID").ok();
     state_path(&state_dir, scope, workspace_id, server_id.as_deref())
-}
-
-fn visible_scratch_pane_id_from_state(
-    current: &PaneInfo,
-    panes: &[PaneInfo],
-) -> Result<Option<String>> {
-    let state_dir = default_state_dir();
-    let server_id = std::env::var("HERDR_SERVER_ID").ok();
-
-    for scope in [Scope::Workspace, Scope::Session] {
-        let path = state_path(
-            &state_dir,
-            scope,
-            current.workspace_id.as_deref(),
-            server_id.as_deref(),
-        );
-        let Some(state) = read_state(&path)? else {
-            continue;
-        };
-        let Some(scratch_pane_id) = state.scratch_pane_id else {
-            continue;
-        };
-        if panes.iter().any(|pane| pane.pane_id == scratch_pane_id) {
-            return Ok(Some(scratch_pane_id));
-        }
-    }
-
-    Ok(None)
 }
 
 fn scope_from_scratch_pane(pane: &PaneInfo) -> Option<Scope> {

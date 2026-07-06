@@ -9,21 +9,6 @@ pub struct OpenPaneRequest {
     pub cwd: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SplitDirection {
-    Right,
-    Down,
-}
-
-impl SplitDirection {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Right => "right",
-            Self::Down => "down",
-        }
-    }
-}
-
 pub fn open_pane_args(request: OpenPaneRequest) -> Vec<String> {
     let mut args = vec![
         "plugin".into(),
@@ -95,17 +80,6 @@ pub fn workspace_rename_args(workspace_id: &str, label: &str) -> Vec<String> {
 
 pub fn notification_args(message: &str) -> Vec<String> {
     vec!["notification".into(), "show".into(), message.into()]
-}
-
-pub fn split_pane_args(direction: SplitDirection) -> Vec<String> {
-    vec![
-        "pane".into(),
-        "split".into(),
-        "--current".into(),
-        "--direction".into(),
-        direction.as_str().into(),
-        "--focus".into(),
-    ]
 }
 
 /// Clears pane metadata written by early floating-pane prototypes.
