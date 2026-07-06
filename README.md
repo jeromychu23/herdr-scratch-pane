@@ -8,7 +8,7 @@ editors, and REPLs working like they do in a regular Herdr pane.
 
 ## Demo
 
-<video src="https://github.com/jeromychu23/herdr-scratch-pane/releases/download/v0.1.1/herdr-scratch-pane-demo.mp4" autoplay loop muted playsinline width="100%"></video>
+![herdr-scratch-pane demo](https://github.com/jeromychu23/herdr-scratch-pane/releases/download/v0.1.1/herdr-scratch-pane-demo.gif)
 
 ## What It Does
 
