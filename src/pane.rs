@@ -3,7 +3,7 @@ use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 
-use crate::scope::{session_name, Scope};
+use crate::scope::{session_identity, session_name, Scope};
 use crate::state::default_state_dir;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,14 +51,17 @@ pub fn run(scope: Scope) -> Result<()> {
 
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
     let workspace_id = std::env::var("HERDR_WORKSPACE_ID").ok();
-    let server_id = std::env::var("HERDR_SERVER_ID").ok();
+    let session_id = session_identity(
+        std::env::var("HERDR_SERVER_ID").ok().as_deref(),
+        std::env::var("HERDR_SOCKET_PATH").ok().as_deref(),
+    );
     let cwd = std::env::var("HERDR_SCRATCH_PANE_CWD")
         .ok()
         .map(PathBuf::from);
     let dtach = dtach_command(
         scope,
         workspace_id.as_deref(),
-        server_id.as_deref(),
+        session_id.as_deref(),
         &state_dir,
         &shell,
         cwd.as_deref(),

@@ -43,7 +43,9 @@ herdr plugin install jeromychu23/herdr-scratch-pane
 herdr plugin action invoke herdr-scratch-pane.install-keybindings
 ```
 
-Reload Herdr config or restart Herdr after installing keybindings.
+Reload Herdr config or restart Herdr after installing keybindings. If you use
+named Herdr sessions, reload each running session that should receive the new
+keys.
 
 For local development:
 
@@ -62,6 +64,7 @@ herdr plugin link /path/to/herdr-scratch-pane
 
 The installer writes keybindings for you. If you want to configure the core
 scratch pane keys manually, add these commands to `~/.config/herdr/config.toml`.
+Replace `/absolute/path/to/herdr-scratch-pane` with the built plugin binary.
 
 If your config already has a `[keys]` table, do not paste another `[keys]`
 header; add these entries inside the existing keys section.
@@ -70,29 +73,37 @@ header; add these entries inside the existing keys section.
 [keys]
 [[keys.command]]
 key = "prefix+f"
-type = "plugin_action"
-command = "herdr-scratch-pane.toggle-workspace"
+type = "shell"
+command = "/absolute/path/to/herdr-scratch-pane toggle --scope workspace"
 description = "Toggle workspace scratch pane"
 
 [[keys.command]]
 key = "prefix+shift+f"
-type = "plugin_action"
-command = "herdr-scratch-pane.toggle-session"
+type = "shell"
+command = "/absolute/path/to/herdr-scratch-pane toggle --scope session"
 description = "Toggle session scratch pane"
 
 [[keys.command]]
 key = "prefix+cmd+z"
-type = "plugin_action"
-command = "herdr-scratch-pane.minimize-current"
+type = "shell"
+command = "/absolute/path/to/herdr-scratch-pane minimize"
 description = "Minimize current scratch pane"
 ```
+
+The keybindings intentionally use `type = "shell"` instead of
+`type = "plugin_action"`. Herdr named sessions share the same config, but a new
+session may not have the plugin action registry loaded yet. Calling the binary
+directly keeps `prefix+f` and `prefix+shift+f` working across sessions.
+
+If you installed an earlier version, run `install-keybindings` again. It updates
+old scratch pane keybindings and removes the previous split-key workaround.
 
 ## Limitations
 
 - This is a native zoomed scratch pane, not a transparent floating overlay.
 - It does not provide mouse resize handles or a mouse minimize button.
 - `prefix+cmd+z` depends on your terminal forwarding Command/Super key chords
-  to Herdr. If it does not work, bind `herdr-scratch-pane.minimize-current` to
+  to Herdr. If it does not work, bind the same `minimize` shell command to
   another key.
 - When a scratch pane is open, Herdr's native split keybindings may leave the
   scratch pane and split the underlying layout.

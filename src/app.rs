@@ -5,8 +5,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use crate::commands::{
-    clear_legacy_marker_args, close_pane_args, notification_args, open_pane_args,
-    workspace_rename_args, zoom_pane_args, OpenPaneRequest,
+    clear_legacy_marker_args, close_pane_args, notification_args, open_pane_args, pane_run_command,
+    rename_scratch_pane_args, run_pane_args, workspace_rename_args, zoom_pane_args,
+    OpenPaneRequest,
 };
 use crate::decisions::{
     decide_toggle, minimize_decision, open_target_for_current, MinimizeDecision, ToggleDecision,
@@ -14,7 +15,7 @@ use crate::decisions::{
 };
 use crate::herdr::{parse_opened_pane_id, Herdr, PaneInfo};
 use crate::keybindings::install_keybindings_text;
-use crate::scope::Scope;
+use crate::scope::{session_identity, Scope};
 use crate::state::{
     default_state_dir, dtach_socket_path, read_state, remove_state, state_path, write_state,
     ScratchState,
@@ -98,7 +99,9 @@ pub fn install_keybindings(
             .with_context(|| format!("failed to create config dir {}", parent.display()))?;
     }
     let existing = read_config_or_empty(&path)?;
-    let updated = install_keybindings_text(&existing, workspace_key, session_key, minimize_key)?;
+    let binary = current_binary_path()?;
+    let updated =
+        install_keybindings_text(&existing, workspace_key, session_key, minimize_key, &binary)?;
     if updated != existing {
         backup_config(&path, &existing)?;
         fs::write(&path, updated).with_context(|| format!("failed to write {}", path.display()))?;
@@ -125,6 +128,7 @@ fn open_and_zoom(herdr: &Herdr, scope: Scope, current: &PaneInfo) -> Result<()> 
         cwd,
     }))?;
     let pane_id = parse_opened_pane_id(&stdout).context("Herdr did not return a pane id")?;
+    herdr.run(rename_scratch_pane_args(&pane_id, scope))?;
     let state = ScratchState {
         scope,
         workspace_id: current.workspace_id.clone(),
@@ -135,6 +139,8 @@ fn open_and_zoom(herdr: &Herdr, scope: Scope, current: &PaneInfo) -> Result<()> 
         marked_workspace_label: None,
     };
     write_state(&state_file(scope, current.workspace_id.as_deref()), &state)?;
+    let binary = current_binary_path()?;
+    herdr.run(run_pane_args(&pane_id, &pane_run_command(&binary, scope)))?;
     herdr.run(zoom_pane_args(&pane_id)).map(|_| ())
 }
 
@@ -180,6 +186,10 @@ fn clear_background_marker(
         restore_workspace_marker(herdr, &mut state, current.workspace_id.as_deref())?;
 
         let state_dir = default_state_dir();
+        let session_id = session_identity(
+            std::env::var("HERDR_SERVER_ID").ok().as_deref(),
+            std::env::var("HERDR_SOCKET_PATH").ok().as_deref(),
+        );
         let socket = dtach_socket_path(
             &state_dir,
             scope,
@@ -187,7 +197,7 @@ fn clear_background_marker(
                 .workspace_id
                 .as_deref()
                 .or(current.workspace_id.as_deref()),
-            std::env::var("HERDR_SERVER_ID").ok().as_deref(),
+            session_id.as_deref(),
         );
         if !socket.exists() {
             remove_state(&path)?;
@@ -251,8 +261,17 @@ fn restore_workspace_marker(
 
 fn state_file(scope: Scope, workspace_id: Option<&str>) -> PathBuf {
     let state_dir = default_state_dir();
-    let server_id = std::env::var("HERDR_SERVER_ID").ok();
-    state_path(&state_dir, scope, workspace_id, server_id.as_deref())
+    let session_id = session_identity(
+        std::env::var("HERDR_SERVER_ID").ok().as_deref(),
+        std::env::var("HERDR_SOCKET_PATH").ok().as_deref(),
+    );
+    state_path(&state_dir, scope, workspace_id, session_id.as_deref())
+}
+
+fn current_binary_path() -> Result<String> {
+    std::env::current_exe()
+        .context("failed to resolve current executable path")
+        .map(|path| path.display().to_string())
 }
 
 fn scope_from_scratch_pane(pane: &PaneInfo) -> Option<Scope> {
