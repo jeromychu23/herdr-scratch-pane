@@ -1,4 +1,4 @@
 # Contributors
 
 - Jeromy Chu - maintainer
-- OpenAI Codex - AI-assisted development
+- [Codex](https://github.com/codex) - AI-assisted development and review
