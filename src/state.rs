@@ -31,6 +31,7 @@ pub fn state_path(
     ))
 }
 
+#[deprecated(note = "tmux is now the active runtime; retained for legacy dtach recovery")]
 pub fn dtach_socket_path(
     state_dir: &Path,
     scope: Scope,
@@ -44,6 +45,9 @@ pub fn dtach_socket_path(
 }
 
 pub fn default_state_dir() -> PathBuf {
+    if let Ok(dir) = env::var("HERDR_SCRATCH_PANE_STATE_DIR") {
+        return PathBuf::from(dir);
+    }
     if let Ok(dir) = env::var("HERDR_PLUGIN_STATE_DIR") {
         return PathBuf::from(dir);
     }

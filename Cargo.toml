@@ -1,12 +1,12 @@
 [package]
 name = "herdr-scratch-pane"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
-description = "A native zoomed scratch pane plugin for Herdr"
+description = "A persistent native floating scratch popup plugin for Herdr"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/jeromychu23/herdr-scratch-pane"
-keywords = ["herdr", "plugin", "scratch-pane", "dtach"]
+keywords = ["herdr", "plugin", "scratch-pane", "tmux"]
 categories = ["command-line-utilities"]
 
 [lib]

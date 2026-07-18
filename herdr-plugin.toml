@@ -1,14 +1,13 @@
 # herdr-scratch-pane
 #
-# Native zoomed scratch panes for Herdr. The plugin does not draw its own
-# terminal UI; it lets Herdr render the pane directly so full-screen TUIs keep
-# their original behavior.
+# Native floating scratch popups for Herdr. Herdr composites the popup over the
+# active pane while tmux preserves the shell and current terminal viewport.
 
 id = "herdr-scratch-pane"
 name = "herdr-scratch-pane"
-version = "0.1.1"
-description = "Native zoomed scratch panes for Herdr."
-min_herdr_version = "0.7.1"
+version = "0.1.2"
+description = "Persistent native floating scratch popups for Herdr."
+min_herdr_version = "0.7.4"
 platforms = ["macos"]
 
 [[build]]
@@ -17,31 +16,35 @@ command = ["cargo", "build", "--release"]
 [[panes]]
 id = "workspace-scratch"
 title = "⌂ scratch workspace"
-placement = "split"
+placement = "popup"
+width = "85%"
+height = "80%"
 command = ["./target/release/herdr-scratch-pane", "run-pane", "--scope", "workspace"]
 
 [[panes]]
 id = "session-scratch"
 title = "⌂ scratch session"
-placement = "split"
+placement = "popup"
+width = "85%"
+height = "80%"
 command = ["./target/release/herdr-scratch-pane", "run-pane", "--scope", "session"]
 
 [[actions]]
 id = "toggle-workspace"
 title = "Toggle workspace scratch pane"
-description = "Open, reveal, or minimize the scratch pane for the current workspace."
+description = "Open or reattach the floating scratch popup for the current workspace."
 command = ["./target/release/herdr-scratch-pane", "toggle", "--scope", "workspace"]
 
 [[actions]]
 id = "toggle-session"
 title = "Toggle session scratch pane"
-description = "Open, reveal, or minimize the session-global scratch pane."
+description = "Open or reattach the session-global floating scratch popup."
 command = ["./target/release/herdr-scratch-pane", "toggle", "--scope", "session"]
 
 [[actions]]
 id = "minimize-current"
 title = "Minimize current scratch pane"
-description = "Minimize whichever herdr-scratch-pane host pane is visible."
+description = "Compatibility action for minimizing a legacy split scratch pane."
 command = ["./target/release/herdr-scratch-pane", "minimize"]
 
 [[actions]]

@@ -23,7 +23,7 @@ enum Commands {
         workspace_key: String,
         #[arg(long, default_value = "prefix+shift+f")]
         session_key: String,
-        #[arg(long, default_value = "prefix+cmd+z")]
+        #[arg(long, default_value = "prefix+cmd+z", hide = true)]
         minimize_key: String,
         #[arg(long)]
         config: Option<PathBuf>,
@@ -72,6 +72,6 @@ fn run() -> Result<()> {
             &session_key,
             &minimize_key,
         ),
-        Commands::RunPane { scope } => herdr_scratch_pane::pane::run(scope.into()),
+        Commands::RunPane { scope } => herdr_scratch_pane::app::run_popup(scope.into()),
     }
 }

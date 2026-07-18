@@ -1,12 +1,83 @@
 use crate::scope::{scratch_label, Scope};
 
 pub const PLUGIN_ID: &str = "herdr-scratch-pane";
+pub const POPUP_WIDTH: &str = "85%";
+pub const POPUP_HEIGHT: &str = "80%";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenPaneRequest {
     pub scope: Scope,
     pub target_pane_id: Option<String>,
     pub cwd: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PopupOpenRequest {
+    pub scope: Scope,
+    pub workspace_id: Option<String>,
+    pub session_id: String,
+    pub state_dir: String,
+    pub cwd: Option<String>,
+    pub tmux_prefix: String,
+}
+
+pub fn open_popup_args(request: PopupOpenRequest) -> Vec<String> {
+    let entrypoint = match request.scope {
+        Scope::Workspace => "workspace-scratch",
+        Scope::Session => "session-scratch",
+    };
+    let mut args = vec![
+        "plugin".into(),
+        "pane".into(),
+        "open".into(),
+        "--plugin".into(),
+        PLUGIN_ID.into(),
+        "--entrypoint".into(),
+        entrypoint.into(),
+        "--placement".into(),
+        "popup".into(),
+        "--width".into(),
+        POPUP_WIDTH.into(),
+        "--height".into(),
+        POPUP_HEIGHT.into(),
+    ];
+
+    if let Some(cwd) = request.cwd.as_deref() {
+        args.push("--cwd".into());
+        args.push(cwd.into());
+    }
+
+    args.push("--env".into());
+    args.push(format!(
+        "HERDR_SCRATCH_PANE_SCOPE={}",
+        request.scope.as_str()
+    ));
+
+    if let Some(workspace_id) = request.workspace_id {
+        args.push("--env".into());
+        args.push(format!("HERDR_WORKSPACE_ID={workspace_id}"));
+    }
+
+    args.push("--env".into());
+    args.push(format!(
+        "HERDR_SCRATCH_PANE_SESSION_ID={}",
+        request.session_id
+    ));
+    args.push("--env".into());
+    args.push(format!(
+        "HERDR_SCRATCH_PANE_STATE_DIR={}",
+        request.state_dir
+    ));
+
+    if let Some(cwd) = request.cwd {
+        args.push("--env".into());
+        args.push(format!("HERDR_SCRATCH_PANE_CWD={cwd}"));
+    }
+
+    args.push("--env".into());
+    args.push(format!("HERDR_SCRATCH_PANE_PREFIX={}", request.tmux_prefix));
+    args.push("--focus".into());
+    args
 }
 
 pub fn open_pane_args(request: OpenPaneRequest) -> Vec<String> {

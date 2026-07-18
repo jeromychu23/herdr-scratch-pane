@@ -5,20 +5,18 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use crate::commands::{
-    clear_legacy_marker_args, close_pane_args, notification_args, open_pane_args, pane_run_command,
-    rename_scratch_pane_args, run_pane_args, workspace_rename_args, zoom_pane_args,
-    OpenPaneRequest,
+    clear_legacy_marker_args, close_pane_args, notification_args, open_popup_args,
+    workspace_rename_args, PopupOpenRequest,
 };
 use crate::decisions::{
-    decide_toggle, minimize_decision, open_target_for_current, MinimizeDecision, ToggleDecision,
-    ToggleInputs,
+    decide_toggle, minimize_decision, MinimizeDecision, ToggleDecision, ToggleInputs,
 };
-use crate::herdr::{parse_opened_pane_id, Herdr, PaneInfo};
-use crate::keybindings::install_keybindings_text;
+use crate::herdr::{Herdr, PaneInfo};
+use crate::keybindings::{install_popup_keybindings_text, tmux_prefix_from_config};
+use crate::pane::{run_client, tmux_session_exists, SessionDisposition};
 use crate::scope::{session_identity, Scope};
 use crate::state::{
-    default_state_dir, dtach_socket_path, read_state, remove_state, state_path, write_state,
-    ScratchState,
+    default_state_dir, read_state, remove_state, state_path, write_state, ScratchState,
 };
 use crate::workspace_marker::{
     legacy_marker_cleanup_target, marked_workspace_label, original_workspace_label,
@@ -38,31 +36,26 @@ pub fn toggle(scope: Scope) -> Result<()> {
     });
 
     match decision {
-        ToggleDecision::Open { scope } => open_and_zoom(&herdr, scope, &current),
-        ToggleDecision::Reveal { pane_id } => {
-            clear_background_marker(&herdr, scope, &current, &panes)?;
-            herdr.run(zoom_pane_args(&pane_id)).map(|_| ())
-        }
-        ToggleDecision::Close { pane_id } => {
-            close_scratch_and_mark(&herdr, &pane_id, scope, &current, &panes)
+        ToggleDecision::Open { .. } => {}
+        ToggleDecision::Reveal { pane_id } | ToggleDecision::Close { pane_id } => {
+            migrate_legacy_scratch_pane(&herdr, &pane_id, scope, &current, &panes)?;
         }
         ToggleDecision::CloseThenOpen {
             close_pane_id,
-            scope,
+            scope: _,
         } => {
             if let Some(close_scope) = panes
                 .iter()
                 .find(|pane| pane.pane_id == close_pane_id)
                 .and_then(scope_from_scratch_pane)
             {
-                let _ =
-                    close_scratch_and_mark(&herdr, &close_pane_id, close_scope, &current, &panes);
+                migrate_legacy_scratch_pane(&herdr, &close_pane_id, close_scope, &current, &panes)?;
             } else {
-                let _ = herdr.run(close_pane_args(&close_pane_id));
+                herdr.run(close_pane_args(&close_pane_id))?;
             }
-            open_and_zoom(&herdr, scope, &current)
         }
     }
+    open_popup(&herdr, scope, &current)
 }
 
 pub fn minimize() -> Result<()> {
@@ -91,7 +84,7 @@ pub fn install_keybindings(
     config_path: Option<PathBuf>,
     workspace_key: &str,
     session_key: &str,
-    minimize_key: &str,
+    _minimize_key: &str,
 ) -> Result<()> {
     let path = config_path.unwrap_or_else(default_config_path);
     if let Some(parent) = path.parent() {
@@ -100,8 +93,7 @@ pub fn install_keybindings(
     }
     let existing = read_config_or_empty(&path)?;
     let binary = current_binary_path()?;
-    let updated =
-        install_keybindings_text(&existing, workspace_key, session_key, minimize_key, &binary)?;
+    let updated = install_popup_keybindings_text(&existing, workspace_key, session_key, &binary)?;
     if updated != existing {
         backup_config(&path, &existing)?;
         fs::write(&path, updated).with_context(|| format!("failed to write {}", path.display()))?;
@@ -113,7 +105,60 @@ pub fn install_keybindings(
     Ok(())
 }
 
-fn open_and_zoom(herdr: &Herdr, scope: Scope, current: &PaneInfo) -> Result<()> {
+pub fn run_popup(scope: Scope) -> Result<()> {
+    let herdr = Herdr::from_env();
+    let current = herdr.current_pane().ok();
+    let workspace_id = std::env::var("HERDR_WORKSPACE_ID")
+        .ok()
+        .or_else(plugin_context_workspace_id)
+        .or_else(|| current.as_ref().and_then(|pane| pane.workspace_id.clone()));
+    let path = state_file(scope, workspace_id.as_deref());
+    let mut state = read_state(&path)?.unwrap_or_else(|| ScratchState {
+        scope,
+        workspace_id: workspace_id.clone(),
+        host_pane_id: current
+            .as_ref()
+            .map(|pane| pane.pane_id.clone())
+            .or_else(|| std::env::var("HERDR_ACTIVE_PANE_ID").ok())
+            .unwrap_or_else(|| "popup-host".into()),
+        scratch_pane_id: None,
+        original_workspace_label: None,
+        marked_workspace_label: None,
+    });
+    state.scope = scope;
+    state.workspace_id = workspace_id.clone().or(state.workspace_id);
+    state.scratch_pane_id = None;
+    write_state(&path, &state)?;
+
+    match run_client(scope) {
+        Ok(SessionDisposition::Detached) => {
+            mark_workspace_label(&herdr, &mut state, workspace_id.as_deref())?;
+            write_state(&path, &state)
+        }
+        Ok(SessionDisposition::Ended) => {
+            let restore_result =
+                restore_workspace_marker(&herdr, &mut state, workspace_id.as_deref());
+            let remove_result = remove_state(&path);
+            restore_result?;
+            remove_result
+        }
+        Err(error) => {
+            let _ = restore_workspace_marker(&herdr, &mut state, workspace_id.as_deref());
+            let _ = remove_state(&path);
+            Err(error)
+        }
+    }
+}
+
+fn open_popup(herdr: &Herdr, scope: Scope, current: &PaneInfo) -> Result<()> {
+    let config_path = default_config_path();
+    let config = read_config_or_empty(&config_path)?;
+    let tmux_prefix = tmux_prefix_from_config(&config).with_context(|| {
+        format!(
+            "failed to map Herdr prefix from {} to a tmux key",
+            config_path.display()
+        )
+    })?;
     let panes = herdr.pane_list()?;
     clear_background_marker(herdr, scope, current, &panes)?;
 
@@ -122,26 +167,87 @@ fn open_and_zoom(herdr: &Herdr, scope: Scope, current: &PaneInfo) -> Result<()> 
             .ok()
             .map(|p| p.display().to_string())
     });
-    let stdout = herdr.run(open_pane_args(OpenPaneRequest {
-        scope,
-        target_pane_id: open_target_for_current(current),
-        cwd,
-    }))?;
-    let pane_id = parse_opened_pane_id(&stdout).context("Herdr did not return a pane id")?;
-    herdr.run(rename_scratch_pane_args(&pane_id, scope))?;
-    let state = ScratchState {
+    let path = state_file(scope, current.workspace_id.as_deref());
+    let mut state = read_state(&path)?.unwrap_or(ScratchState {
         scope,
         workspace_id: current.workspace_id.clone(),
         host_pane_id: legacy_marker_cleanup_target(None, &panes, current)
             .unwrap_or_else(|| current.pane_id.clone()),
-        scratch_pane_id: Some(pane_id.clone()),
+        scratch_pane_id: None,
         original_workspace_label: None,
         marked_workspace_label: None,
-    };
-    write_state(&state_file(scope, current.workspace_id.as_deref()), &state)?;
-    let binary = current_binary_path()?;
-    herdr.run(run_pane_args(&pane_id, &pane_run_command(&binary, scope)))?;
-    herdr.run(zoom_pane_args(&pane_id)).map(|_| ())
+    });
+    state.scope = scope;
+    state.workspace_id = current.workspace_id.clone().or(state.workspace_id);
+    state.host_pane_id = legacy_marker_cleanup_target(Some(&state), &panes, current)
+        .unwrap_or_else(|| current.pane_id.clone());
+    state.scratch_pane_id = None;
+    write_state(&path, &state)?;
+
+    match herdr.run(open_popup_args(PopupOpenRequest {
+        scope,
+        workspace_id: current.workspace_id.clone(),
+        session_id: scratch_session_identity().unwrap_or_else(|| "default".into()),
+        state_dir: default_state_dir().display().to_string(),
+        cwd,
+        tmux_prefix,
+    })) {
+        Ok(_) => Ok(()),
+        Err(error) => {
+            rollback_popup_open(herdr, scope, current, &path, &mut state);
+            Err(error)
+        }
+    }
+}
+
+fn rollback_popup_open(
+    herdr: &Herdr,
+    scope: Scope,
+    current: &PaneInfo,
+    path: &Path,
+    state: &mut ScratchState,
+) {
+    let state_dir = default_state_dir();
+    let session_id = scratch_session_identity();
+    let session_alive = tmux_session_exists(
+        &state_dir,
+        scope,
+        state
+            .workspace_id
+            .as_deref()
+            .or(current.workspace_id.as_deref()),
+        session_id.as_deref(),
+    )
+    .unwrap_or(false);
+
+    if session_alive {
+        let _ = mark_workspace_label(herdr, state, current.workspace_id.as_deref());
+        let _ = write_state(path, state);
+    } else {
+        let _ = remove_state(path);
+    }
+}
+
+fn migrate_legacy_scratch_pane(
+    herdr: &Herdr,
+    pane_id: &str,
+    scope: Scope,
+    current: &PaneInfo,
+    panes: &[PaneInfo],
+) -> Result<()> {
+    let path = state_file(scope, current.workspace_id.as_deref());
+    let mut state = read_state(&path)?;
+    let legacy_marker_target = legacy_marker_cleanup_target(state.as_ref(), panes, current);
+
+    herdr.run(close_pane_args(pane_id))?;
+    if let Some(target) = legacy_marker_target {
+        let _ = herdr.run(clear_legacy_marker_args(&target));
+    }
+    if let Some(state) = state.as_mut() {
+        state.scratch_pane_id = None;
+        write_state(&path, state)?;
+    }
+    Ok(())
 }
 
 fn close_scratch_and_mark(
@@ -186,11 +292,8 @@ fn clear_background_marker(
         restore_workspace_marker(herdr, &mut state, current.workspace_id.as_deref())?;
 
         let state_dir = default_state_dir();
-        let session_id = session_identity(
-            std::env::var("HERDR_SERVER_ID").ok().as_deref(),
-            std::env::var("HERDR_SOCKET_PATH").ok().as_deref(),
-        );
-        let socket = dtach_socket_path(
+        let session_id = scratch_session_identity();
+        let session_alive = tmux_session_exists(
             &state_dir,
             scope,
             state
@@ -198,8 +301,8 @@ fn clear_background_marker(
                 .as_deref()
                 .or(current.workspace_id.as_deref()),
             session_id.as_deref(),
-        );
-        if !socket.exists() {
+        )?;
+        if !session_alive {
             remove_state(&path)?;
         } else {
             write_state(&path, &state)?;
@@ -261,11 +364,28 @@ fn restore_workspace_marker(
 
 fn state_file(scope: Scope, workspace_id: Option<&str>) -> PathBuf {
     let state_dir = default_state_dir();
-    let session_id = session_identity(
-        std::env::var("HERDR_SERVER_ID").ok().as_deref(),
-        std::env::var("HERDR_SOCKET_PATH").ok().as_deref(),
-    );
+    let session_id = scratch_session_identity();
     state_path(&state_dir, scope, workspace_id, session_id.as_deref())
+}
+
+fn scratch_session_identity() -> Option<String> {
+    std::env::var("HERDR_SCRATCH_PANE_SESSION_ID")
+        .ok()
+        .or_else(|| {
+            session_identity(
+                std::env::var("HERDR_SERVER_ID").ok().as_deref(),
+                std::env::var("HERDR_SOCKET_PATH").ok().as_deref(),
+            )
+        })
+}
+
+fn plugin_context_workspace_id() -> Option<String> {
+    let context = std::env::var("HERDR_PLUGIN_CONTEXT_JSON").ok()?;
+    let value: serde_json::Value = serde_json::from_str(&context).ok()?;
+    value
+        .get("workspace_id")
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned)
 }
 
 fn current_binary_path() -> Result<String> {
@@ -306,6 +426,9 @@ fn backup_config(path: &Path, existing: &str) -> Result<()> {
 }
 
 fn default_config_path() -> PathBuf {
+    if let Ok(path) = std::env::var("HERDR_CONFIG_PATH") {
+        return PathBuf::from(path);
+    }
     if let Ok(dir) = std::env::var("HERDR_CONFIG_DIR") {
         return PathBuf::from(dir).join("config.toml");
     }
