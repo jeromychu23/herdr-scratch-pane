@@ -1,4 +1,4 @@
-# herdr-scratch-pane
+# herdr-popupx
 
 A Herdr plugin for a persistent native floating scratch popup.
 
