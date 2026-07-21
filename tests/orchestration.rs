@@ -196,7 +196,7 @@ fn popup_open_failure_removes_new_state_and_preserves_original_error() {
 }
 
 #[test]
-fn popup_open_args_use_percentage_geometry_and_omit_layout_targets() {
+fn popup_open_args_preserve_plugin_root_and_pass_scratch_cwd_via_env() {
     let args = open_popup_args(PopupOpenRequest {
         scope: Scope::Workspace,
         workspace_id: Some("w1".into()),
@@ -222,8 +222,6 @@ fn popup_open_args_use_percentage_geometry_and_omit_layout_targets() {
             "85%",
             "--height",
             "80%",
-            "--cwd",
-            "/tmp/proj",
             "--env",
             "HERDR_SCRATCH_PANE_SCOPE=workspace",
             "--env",
@@ -239,9 +237,10 @@ fn popup_open_args_use_percentage_geometry_and_omit_layout_targets() {
             "--focus",
         ]
     );
-    assert!(!args
-        .iter()
-        .any(|arg| matches!(arg.as_str(), "--pane" | "--current" | "--direction")));
+    assert!(!args.iter().any(|arg| matches!(
+        arg.as_str(),
+        "--pane" | "--current" | "--direction" | "--cwd"
+    )));
 }
 
 #[test]

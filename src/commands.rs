@@ -42,11 +42,6 @@ pub fn open_popup_args(request: PopupOpenRequest) -> Vec<String> {
         POPUP_HEIGHT.into(),
     ];
 
-    if let Some(cwd) = request.cwd.as_deref() {
-        args.push("--cwd".into());
-        args.push(cwd.into());
-    }
-
     args.push("--env".into());
     args.push(format!(
         "HERDR_SCRATCH_PANE_SCOPE={}",
